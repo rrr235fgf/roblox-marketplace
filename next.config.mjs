@@ -2,8 +2,29 @@
 const nextConfig = {
   reactStrictMode: true,
   images: {
-    domains: ['cdn.discordapp.com', 'tr.rbxcdn.com', 'www.roblox.com', 'replicate.delivery'],
+    domains: [
+      'cdn.discordapp.com', 
+      'i.ibb.co', 
+      'placeholder.pics', 
+      'via.placeholder.com',
+      'placehold.co',
+      'placekitten.com',
+      'picsum.photos',
+      'tr.rbxcdn.com', 
+      'www.roblox.com', 
+      'replicate.delivery'
+    ],
     unoptimized: true,
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: '**',
+      },
+      {
+        protocol: 'http',
+        hostname: '**',
+      },
+    ],
   },
   eslint: {
     ignoreDuringBuilds: true,
@@ -11,18 +32,10 @@ const nextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
-  // Add this to force using Tailwind v3 instead of v4
-  webpack: (config) => {
-    // Find the rule that handles CSS
-    const rules = config.module.rules.find((rule) => typeof rule.oneOf === 'object').oneOf;
-    
-    // Force resolve tailwindcss to v3
-    config.resolve.alias = {
-      ...config.resolve.alias,
-      tailwindcss: require.resolve('tailwindcss'),
-    };
-    
-    return config;
+  // استخدام حل بسيط لتجنب مشكلة Tailwind CSS
+  experimental: {
+    // تعطيل بعض الميزات التجريبية التي قد تسبب مشاكل
+    esmExternals: 'loose',
   },
 }
 
