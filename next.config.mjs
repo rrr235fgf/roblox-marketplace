@@ -1,6 +1,5 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  reactStrictMode: true,
   images: {
     domains: [
       'cdn.discordapp.com', 
@@ -31,12 +30,7 @@ const nextConfig = {
   },
   typescript: {
     ignoreBuildErrors: true,
-  },
-  // استخدام حل بسيط لتجنب مشكلة Tailwind CSS
-  experimental: {
-    // تعطيل بعض الميزات التجريبية التي قد تسبب مشاكل
-    esmExternals: 'loose',
-  },
+  }
 }
 
 export default nextConfig
