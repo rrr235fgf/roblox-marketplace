@@ -69,15 +69,15 @@
     "@aws-sdk/credential-providers": "latest",
     "@emotion/is-prop-valid": "latest",
     "next-auth": "latest",
-    "tailwindcss": "latest",
-    "@tailwindcss/typography": "latest",
     "mongodb": "latest",
     "uuid": "latest",
     "framer-motion": "latest",
     "@ai-sdk/replicate": "latest",
     "ai": "latest",
     "crypto": "latest",
-    "canvas-confetti": "latest"
+    "canvas-confetti": "latest",
+    "tailwindcss": "latest",
+    "@tailwindcss/typography": "latest"
   },
   "devDependencies": {
     "@types/node": "^22",
