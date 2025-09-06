@@ -10,7 +10,6 @@ declare module "next-auth" {
       name?: string | null
       email?: string | null
       image?: string | null
-      emailVerified?: boolean
     }
   }
 }
@@ -18,7 +17,6 @@ declare module "next-auth" {
 declare module "next-auth/jwt" {
   interface JWT {
     id?: string
-    emailVerified?: boolean
   }
 }
 
@@ -31,7 +29,6 @@ export const authOptions: NextAuthOptions = {
         password: { label: "Password", type: "password" },
         name: { label: "Name", type: "text", optional: true },
         isSignUp: { label: "Is Sign Up", type: "text", optional: true },
-        verificationToken: { label: "Verification Token", type: "text", optional: true },
       },
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) {
@@ -68,7 +65,7 @@ export const authOptions: NextAuthOptions = {
               totalSales: 0,
               listedAssets: 0,
               averageRating: 0,
-              emailVerified: false,
+              emailVerified: true, // تلقائياً مفعل
             })
 
             return {
@@ -76,7 +73,6 @@ export const authOptions: NextAuthOptions = {
               name: newUser.username,
               email: newUser.email,
               image: newUser.avatar,
-              emailVerified: false,
             }
           } else {
             // تسجيل الدخول
@@ -99,7 +95,6 @@ export const authOptions: NextAuthOptions = {
               name: user.username,
               email: user.email,
               image: user.avatar,
-              emailVerified: user.emailVerified || false,
             }
           }
         } catch (error) {
@@ -113,14 +108,12 @@ export const authOptions: NextAuthOptions = {
     async jwt({ token, user }) {
       if (user) {
         token.id = user.id
-        token.emailVerified = (user as any).emailVerified
       }
       return token
     },
     async session({ session, token }) {
       if (session.user) {
         session.user.id = (token.id as string) || ""
-        session.user.emailVerified = (token.emailVerified as boolean) || false
       }
       return session
     },

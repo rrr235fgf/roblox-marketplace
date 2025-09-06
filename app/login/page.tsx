@@ -12,14 +12,12 @@ import { LoadingSpinner } from "@/components/loading-spinner"
 import { Navbar } from "@/components/navbar"
 import { TermsDialog } from "@/components/terms-dialog"
 import { useToast } from "@/hooks/use-toast"
-import { Eye, EyeOff, Mail, Lock, User, CheckCircle } from "lucide-react"
+import { Eye, EyeOff, Mail, Lock, User } from "lucide-react"
 
 export default function Login() {
   const [isLoading, setIsLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [showTerms, setShowTerms] = useState(false)
-  const [showVerificationMessage, setShowVerificationMessage] = useState(false)
-  const [verificationEmail, setVerificationEmail] = useState("")
   const [formData, setFormData] = useState({
     email: "",
     password: "",
@@ -118,18 +116,11 @@ export default function Login() {
           variant: "destructive",
         })
       } else if (result?.ok) {
-        if (isSignUp) {
-          // إرسال رسالة التحقق
-          await sendVerificationEmail(formData.email)
-          setVerificationEmail(formData.email)
-          setShowVerificationMessage(true)
-        } else {
-          toast({
-            title: "نجح!",
-            description: "تم تسجيل الدخول بنجاح",
-          })
-          router.push("/dashboard")
-        }
+        toast({
+          title: "نجح!",
+          description: isSignUp ? "تم إنشاء الحساب بنجاح" : "تم تسجيل الدخول بنجاح",
+        })
+        router.push("/dashboard")
       }
     } catch (error) {
       toast({
@@ -142,94 +133,10 @@ export default function Login() {
     }
   }
 
-  const sendVerificationEmail = async (email: string) => {
-    try {
-      const response = await fetch("/api/send-verification", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ email }),
-      })
-
-      if (!response.ok) {
-        throw new Error("فشل في إرسال رسالة التحقق")
-      }
-    } catch (error) {
-      console.error("Error sending verification email:", error)
-      toast({
-        title: "تحذير",
-        description: "تم إنشاء الحساب ولكن فشل في إرسال رسالة التحقق",
-        variant: "destructive",
-      })
-    }
-  }
-
-  const resendVerificationEmail = async () => {
-    setIsLoading(true)
-    try {
-      await sendVerificationEmail(verificationEmail)
-      toast({
-        title: "تم الإرسال",
-        description: "تم إعادة إرسال رسالة التحقق",
-      })
-    } catch (error) {
-      toast({
-        title: "خطأ",
-        description: "فشل في إعادة إرسال رسالة التحقق",
-        variant: "destructive",
-      })
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
   const handleAcceptTerms = () => {
     localStorage.setItem("termsAccepted", "true")
     setShowTerms(false)
     handleCredentialsAuth(true)
-  }
-
-  if (showVerificationMessage) {
-    return (
-      <div className="flex min-h-screen flex-col">
-        <Navbar />
-        <main className="flex flex-1 items-center justify-center p-4">
-          <Card className="w-full max-w-md">
-            <CardHeader className="text-center">
-              <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-green-100">
-                <CheckCircle className="h-6 w-6 text-green-600" />
-              </div>
-              <CardTitle className="text-2xl">تحقق من بريدك الإلكتروني</CardTitle>
-              <CardDescription>
-                تم إرسال رسالة تحقق إلى <strong>{verificationEmail}</strong>
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="rounded-lg bg-blue-50 p-4 text-center">
-                <p className="text-sm text-blue-800">
-                  يرجى فتح بريدك الإلكتروني والنقر على رابط التحقق لإكمال عملية التسجيل.
-                </p>
-              </div>
-              <div className="space-y-2">
-                <Button
-                  onClick={resendVerificationEmail}
-                  variant="outline"
-                  className="w-full bg-transparent"
-                  disabled={isLoading}
-                >
-                  {isLoading ? <LoadingSpinner className="mr-2" /> : null}
-                  إعادة إرسال رسالة التحقق
-                </Button>
-                <Button onClick={() => setShowVerificationMessage(false)} variant="ghost" className="w-full">
-                  العودة لتسجيل الدخول
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </main>
-      </div>
-    )
   }
 
   return (
