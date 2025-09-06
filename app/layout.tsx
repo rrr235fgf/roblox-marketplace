@@ -42,7 +42,7 @@ export const metadata: Metadata = {
     description: "موقع بيع كل مايخص روبلوكس (التسجيل عبر الدسكورد)",
     images: ["https://i.ibb.co/LdnzykHc/image-39.png"], // Usando la imagen de la página principal
   },
-    generator: 'v0.dev'
+    generator: 'v0.app'
 }
 
 export default function RootLayout({
