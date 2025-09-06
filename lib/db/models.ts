@@ -6,15 +6,18 @@ export interface User {
   username: string
   email?: string
   avatar: string
-  discordId: string
+  provider?: string // "google", "credentials", "discord" (للتوافق مع النظام القديم)
+  password?: string // للمستخدمين المسجلين يدوياً
+  discordId?: string // للتوافق مع النظام القديم
   badges: string[]
   joinDate: string
   totalSales: number
   listedAssets: number
   averageRating: number
+  emailVerified?: boolean
   createdAt: Date
   updatedAt: Date
-  lastAssetCreatedAt?: Date // وقت آخر منتج تم إضافته
+  lastAssetCreatedAt?: Date
 }
 
 export interface Asset {
@@ -78,7 +81,7 @@ export interface ImageFile {
   id: string
   filename: string
   contentType: string
-  data: string // Base64 encoded image data
+  data: string
   uploadedBy: string
   createdAt: Date
   updatedAt: Date
@@ -91,22 +94,20 @@ export interface NewsletterSubscription {
   createdAt: Date
 }
 
-// نموذج حسابات الجوائز
 export interface PrizeAccount {
   _id?: ObjectId
   id: string
-  type: "empty" | "bloxfruit" | "medium" | "premium" // نوع الحساب
-  username: string // اسم المستخدم للحساب
-  password: string // كلمة المرور للحساب (مشفرة)
-  details?: string // تفاصيل إضافية عن الحساب
-  claimed: boolean // هل تم المطالبة بالحساب
-  claimedBy?: string // معرف المستخدم الذي حصل على الحساب
-  claimedAt?: Date // وقت المطالبة بالحساب
+  type: "empty" | "bloxfruit" | "medium" | "premium"
+  username: string
+  password: string
+  details?: string
+  claimed: boolean
+  claimedBy?: string
+  claimedAt?: Date
   createdAt: Date
   updatedAt: Date
 }
 
-// نموذج سجل عجلة الحظ
 export interface LuckyWheelSpin {
   _id?: ObjectId
   id: string

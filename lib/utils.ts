@@ -1,66 +1,8 @@
-import { clsx, type ClassValue } from "clsx"
+import { type ClassValue, clsx } from "clsx"
 import { twMerge } from "tailwind-merge"
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
-}
-
-// Content moderation functions
-const inappropriateWords = [
-  // Add inappropriate words here
-  "spam",
-  "scam",
-  "hack",
-  "cheat",
-  "exploit",
-  "bot",
-  "fake",
-  "virus",
-  "malware",
-  // Arabic inappropriate words
-  "احتيال",
-  "خداع",
-  "نصب",
-  "هاك",
-  "غش",
-  "فيروس",
-  "برمجيات خبيثة",
-  "سيء",
-  "قبيح",
-  "مكروه",
-  "bad",
-  "ugly",
-  "hate",
-]
-
-export function containsInappropriateContent(text: string): boolean {
-  if (!text || typeof text !== "string") return false
-
-  const lowerText = text.toLowerCase()
-  return inappropriateWords.some((word) => lowerText.includes(word.toLowerCase()))
-}
-
-export function sanitizeText(text: string): string {
-  if (!text || typeof text !== "string") return ""
-
-  // Remove HTML tags
-  let sanitized = text.replace(/<[^>]*>/g, "")
-
-  // Remove excessive whitespace
-  sanitized = sanitized.replace(/\s+/g, " ").trim()
-
-  // Remove special characters that could be used for XSS
-  sanitized = sanitized.replace(/[<>'"&]/g, "")
-
-  return sanitized
-}
-
-// Format currency
-export function formatCurrency(amount: number, currency = "USD"): string {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: currency,
-  }).format(amount)
 }
 
 export function formatPrice(price: number): string {
@@ -70,18 +12,19 @@ export function formatPrice(price: number): string {
   }).format(price)
 }
 
-// Format date
-export function formatDate(date: Date): string {
+export function formatDate(date: Date | string): string {
+  const dateObj = typeof date === "string" ? new Date(date) : date
   return new Intl.DateTimeFormat("ar-SA", {
     year: "numeric",
     month: "long",
     day: "numeric",
-  }).format(date)
+  }).format(dateObj)
 }
 
-export function formatRelativeTime(date: Date): string {
+export function formatRelativeTime(date: Date | string): string {
+  const dateObj = typeof date === "string" ? new Date(date) : date
   const now = new Date()
-  const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000)
+  const diffInSeconds = Math.floor((now.getTime() - dateObj.getTime()) / 1000)
 
   if (diffInSeconds < 60) {
     return "منذ لحظات"
@@ -97,98 +40,153 @@ export function formatRelativeTime(date: Date): string {
   }
 }
 
-// Generate random ID
 export function generateId(): string {
-  return Math.random().toString(36).substr(2, 9)
+  return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15)
 }
 
-// Validate email
-export function isValidEmail(email: string): boolean {
+export function slugify(text: string): string {
+  return text
+    .toString()
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, "-")
+    .replace(/[^\w-]+/g, "")
+    .replace(/--+/g, "-")
+    .replace(/^-+/, "")
+    .replace(/-+$/, "")
+}
+
+export function truncateText(text: string, maxLength: number): string {
+  if (text.length <= maxLength) return text
+  return text.substring(0, maxLength).trim() + "..."
+}
+
+export function validateEmail(email: string): boolean {
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
   return emailRegex.test(email)
 }
 
-// Validate URL
-export function isValidUrl(url: string): boolean {
-  try {
-    new URL(url)
-    return true
-  } catch {
-    return false
-  }
-}
-
-// Truncate text
-export function truncateText(text: string, maxLength: number): string {
-  if (text.length <= maxLength) return text
-  return text.substr(0, maxLength) + "..."
-}
-
-export function truncate(text: string, length: number): string {
-  if (text.length <= length) return text
-  return text.slice(0, length) + "..."
-}
-
-// Slugify text
-export function slugify(text: string): string {
-  return text
-    .toLowerCase()
-    .replace(/[^\w\s-]/g, "")
-    .replace(/[\s_-]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-}
-
-// Validate input
-export function validateInput(
-  input: string,
-  maxLength = 1000,
-): {
+export function validatePassword(password: string): {
   isValid: boolean
-  error?: string
+  errors: string[]
 } {
-  if (!input || input.trim().length === 0) {
-    return { isValid: false, error: "النص مطلوب" }
+  const errors: string[] = []
+
+  if (password.length < 6) {
+    errors.push("كلمة المرور يجب أن تكون 6 أحرف على الأقل")
   }
 
-  if (input.length > maxLength) {
-    return { isValid: false, error: `النص طويل جداً (الحد الأقصى ${maxLength} حرف)` }
+  if (!/(?=.*[a-z])/.test(password)) {
+    errors.push("كلمة المرور يجب أن تحتوي على حرف صغير واحد على الأقل")
   }
 
-  if (containsInappropriateContent(input)) {
-    return { isValid: false, error: "النص يحتوي على محتوى غير مناسب" }
+  if (!/(?=.*[A-Z])/.test(password)) {
+    errors.push("كلمة المرور يجب أن تحتوي على حرف كبير واحد على الأقل")
   }
 
-  return { isValid: true }
+  if (!/(?=.*\d)/.test(password)) {
+    errors.push("كلمة المرور يجب أن تحتوي على رقم واحد على الأقل")
+  }
+
+  return {
+    isValid: errors.length === 0,
+    errors,
+  }
 }
 
-// Format file size
+export function containsInappropriateContent(text: string): boolean {
+  const inappropriateWords = [
+    "كلمات غير مناسبة",
+    "محتوى مسيء",
+    "spam",
+    "scam",
+    // يمكنك إضافة المزيد من الكلمات المحظورة هنا
+  ]
+
+  const lowerText = text.toLowerCase()
+  return inappropriateWords.some((word) => lowerText.includes(word.toLowerCase()))
+}
+
+export function sanitizeText(text: string): string {
+  // إزالة HTML tags
+  const withoutHtml = text.replace(/<[^>]*>/g, "")
+
+  // إزالة الأحرف الخاصة الضارة
+  const sanitized = withoutHtml.replace(/[<>"'&]/g, "")
+
+  // تنظيف المسافات الزائدة
+  const cleaned = sanitized.replace(/\s+/g, " ").trim()
+
+  return cleaned
+}
+
 export function formatFileSize(bytes: number): string {
-  if (bytes === 0) return "0 بايت"
+  if (bytes === 0) return "0 Bytes"
 
   const k = 1024
-  const sizes = ["بايت", "كيلوبايت", "ميجابايت", "جيجابايت"]
+  const sizes = ["Bytes", "KB", "MB", "GB"]
   const i = Math.floor(Math.log(bytes) / Math.log(k))
 
   return Number.parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i]
 }
 
-// Sleep function
-export function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms))
+export function isValidImageType(type: string): boolean {
+  const validTypes = ["image/jpeg", "image/jpg", "image/png", "image/gif", "image/webp"]
+  return validTypes.includes(type)
 }
 
-// Debounce function
-export function debounce<T extends (...args: any[]) => any>(func: T, wait: number): (...args: Parameters<T>) => void {
-  let timeout: NodeJS.Timeout
-  return (...args: Parameters<T>) => {
-    clearTimeout(timeout)
-    timeout = setTimeout(() => func(...args), wait)
+export function calculateTax(
+  price: number,
+  taxRate = 0.3,
+): {
+  originalPrice: number
+  tax: number
+  finalPrice: number
+} {
+  const tax = price * taxRate
+  const finalPrice = price - tax
+
+  return {
+    originalPrice: price,
+    tax,
+    finalPrice,
   }
 }
 
-// Throttle function
+export function calculateDevExRate(
+  robux: number,
+  rate = 0.0035,
+): {
+  robux: number
+  usd: number
+  rate: number
+} {
+  const usd = robux * rate
+
+  return {
+    robux,
+    usd,
+    rate,
+  }
+}
+
+export function debounce<T extends (...args: any[]) => any>(func: T, wait: number): (...args: Parameters<T>) => void {
+  let timeout: NodeJS.Timeout | null = null
+
+  return (...args: Parameters<T>) => {
+    if (timeout) {
+      clearTimeout(timeout)
+    }
+
+    timeout = setTimeout(() => {
+      func(...args)
+    }, wait)
+  }
+}
+
 export function throttle<T extends (...args: any[]) => any>(func: T, limit: number): (...args: Parameters<T>) => void {
   let inThrottle: boolean
+
   return (...args: Parameters<T>) => {
     if (!inThrottle) {
       func(...args)

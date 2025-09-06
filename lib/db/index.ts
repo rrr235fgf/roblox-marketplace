@@ -12,7 +12,6 @@ export function getUserBadges(joinDate: string, existingBadges: string[] = []): 
     ),
   ]
 
-  // إضافة شارة "عضو جديد" إذا لم تكن موجودة بالفعل
   if (
     !badges.includes("عضو جديد") &&
     !badges.includes("عضو نشط") &&
@@ -26,9 +25,7 @@ export function getUserBadges(joinDate: string, existingBadges: string[] = []): 
   const now = new Date()
   const daysSinceRegistration = Math.floor((now.getTime() - registrationDate.getTime()) / (1000 * 60 * 60 * 24))
 
-  // تحديث الشارة بناءً على عدد الأيام منذ التسجيل
   if (daysSinceRegistration >= 50) {
-    // إزالة الشارات السابقة
     const index = badges.findIndex((badge) => badge === "عضو جديد" || badge === "عضو نشط" || badge === "عضو متميز")
     if (index !== -1) {
       badges.splice(index, 1)
@@ -80,17 +77,35 @@ export async function createUser(userData: Omit<User, "_id" | "createdAt" | "upd
   }
 }
 
-// الحصول على مستخدم بواسطة معرف Discord
+// الحصول على مستخدم بواسطة البريد الإلكتروني
+export async function getUserByEmail(email: string) {
+  try {
+    const db = await getDb()
+    const user = await db.collection("users").findOne({ email })
+
+    if (user) {
+      const updatedBadges = getUserBadges(user.joinDate, user.badges)
+      if (JSON.stringify(updatedBadges) !== JSON.stringify(user.badges)) {
+        await db.collection("users").updateOne({ email }, { $set: { badges: updatedBadges, updatedAt: new Date() } })
+        user.badges = updatedBadges
+      }
+    }
+
+    return user
+  } catch (error) {
+    console.error("Error getting user by email:", error)
+    return null
+  }
+}
+
+// الحصول على مستخدم بواسطة معرف Discord (للتوافق مع النظام القديم)
 export async function getUserByDiscordId(discordId: string) {
   try {
     const db = await getDb()
     const user = await db.collection("users").findOne({ discordId })
 
     if (user) {
-      // تحديث الشارات بناءً على تاريخ التسجيل
       const updatedBadges = getUserBadges(user.joinDate, user.badges)
-
-      // إذا تغيرت الشارات، قم بتحديث المستخدم في قاعدة البيانات
       if (JSON.stringify(updatedBadges) !== JSON.stringify(user.badges)) {
         await db
           .collection("users")
@@ -113,10 +128,7 @@ export async function getUserById(id: string) {
     const user = await db.collection("users").findOne({ id })
 
     if (user) {
-      // تحديث الشارات بناءً على تاريخ التسجيل
       const updatedBadges = getUserBadges(user.joinDate, user.badges)
-
-      // إذا تغيرت الشارات، قم بتحديث المستخدم في قاعدة البيانات
       if (JSON.stringify(updatedBadges) !== JSON.stringify(user.badges)) {
         await db.collection("users").updateOne({ id }, { $set: { badges: updatedBadges, updatedAt: new Date() } })
         user.badges = updatedBadges
@@ -140,7 +152,6 @@ export async function updateUser(id: string, userData: Partial<User>) {
     }
 
     const result = await db.collection("users").updateOne({ id }, { $set: updateData })
-
     return result.modifiedCount > 0
   } catch (error) {
     console.error("Error updating user:", error)
@@ -148,26 +159,38 @@ export async function updateUser(id: string, userData: Partial<User>) {
   }
 }
 
+// التحقق من كلمة المرور
+export async function verifyPassword(email: string, password: string) {
+  try {
+    const user = await getUserByEmail(email)
+    if (!user || !user.password) {
+      return false
+    }
+
+    const bcrypt = require("bcryptjs")
+    return await bcrypt.compare(password, user.password)
+  } catch (error) {
+    console.error("Error verifying password:", error)
+    return false
+  }
+}
+
 // ==================== وظائف الأصول ====================
 
-// إنشاء أصل جديد
 export async function createAsset(assetData: Omit<Asset, "_id" | "createdAt" | "updatedAt" | "seller">) {
   try {
     const db = await getDb()
     const now = new Date()
 
-    // التأكد من أن البيانات صالحة
     if (!assetData.id || !assetData.title || !assetData.description || !assetData.sellerId) {
       throw new Error("البيانات غير كاملة")
     }
 
-    // التأكد من أن الصور موجودة وصالحة
     let validImages = Array.isArray(assetData.images)
       ? assetData.images.filter((img) => typeof img === "string" && img.trim() !== "")
       : []
 
     if (validImages.length === 0) {
-      // استخدام صورة افتراضية إذا لم تكن هناك صور صالحة
       validImages = ["/placeholder.svg?height=800&width=600&text=Default+Product+Image"]
     }
 
@@ -180,7 +203,6 @@ export async function createAsset(assetData: Omit<Asset, "_id" | "createdAt" | "
 
     const result = await db.collection("assets").insertOne(newAsset)
 
-    // تحديث عدد المنتجات المدرجة للبائع
     const seller = await db.collection("users").findOne({ id: assetData.sellerId })
     if (seller) {
       await db
@@ -198,7 +220,6 @@ export async function createAsset(assetData: Omit<Asset, "_id" | "createdAt" | "
   }
 }
 
-// الحصول على جميع الأصول مع خيارات التصفية
 export async function getAssets({
   category,
   sellerId,
@@ -217,7 +238,6 @@ export async function getAssets({
   try {
     const db = await getDb()
 
-    // بناء استعلام التصفية
     const filter: any = {}
 
     if (category) {
@@ -239,21 +259,17 @@ export async function getAssets({
       ]
     }
 
-    // الحصول على الأصول
     const assets = await db.collection("assets").find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit).toArray()
 
-    // الحصول على معلومات البائعين
     const sellerIds = [...new Set(assets.map((asset) => asset.sellerId))]
     const sellers = await db
       .collection("users")
       .find({ id: { $in: sellerIds } })
       .toArray()
 
-    // دمج معلومات البائعين مع الأصول
     const assetsWithSellers = assets.map((asset) => {
       const seller = sellers.find((s) => s.id === asset.sellerId)
 
-      // التأكد من أن الصور موجودة وصالحة
       let validImages = Array.isArray(asset.images)
         ? asset.images.filter((img) => typeof img === "string" && img.trim() !== "")
         : []
@@ -271,7 +287,7 @@ export async function getAssets({
               username: seller.username,
               avatar: seller.avatar || "/placeholder.svg",
               badges: seller.badges || [],
-              discordId: seller.discordId,
+              discordId: seller.discordId || "",
             }
           : {
               id: "unknown",
@@ -290,7 +306,6 @@ export async function getAssets({
   }
 }
 
-// الحصول على أصل بواسطة المعرف
 export async function getAssetById(id: string) {
   try {
     const db = await getDb()
@@ -300,10 +315,8 @@ export async function getAssetById(id: string) {
       return null
     }
 
-    // الحصول على معلومات البائع
     const seller = await db.collection("users").findOne({ id: asset.sellerId })
 
-    // التأكد من أن الصور موجودة وصالحة
     let validImages = Array.isArray(asset.images)
       ? asset.images.filter((img) => typeof img === "string" && img.trim() !== "")
       : []
@@ -321,7 +334,7 @@ export async function getAssetById(id: string) {
             username: seller.username,
             avatar: seller.avatar || "/placeholder.svg",
             badges: seller.badges || [],
-            discordId: seller.discordId,
+            discordId: seller.discordId || "",
           }
         : {
             id: "unknown",
@@ -337,12 +350,10 @@ export async function getAssetById(id: string) {
   }
 }
 
-// تحديث أصل
 export async function updateAsset(id: string, assetData: Partial<Asset>) {
   try {
     const db = await getDb()
 
-    // التأكد من أن الصور موجودة وصالحة إذا تم تقديمها
     if (assetData.images) {
       const validImages = Array.isArray(assetData.images)
         ? assetData.images.filter((img) => typeof img === "string" && img.trim() !== "")
@@ -361,7 +372,6 @@ export async function updateAsset(id: string, assetData: Partial<Asset>) {
     }
 
     const result = await db.collection("assets").updateOne({ id }, { $set: updateData })
-
     return result.modifiedCount > 0
   } catch (error) {
     console.error("Error updating asset:", error)
@@ -369,16 +379,13 @@ export async function updateAsset(id: string, assetData: Partial<Asset>) {
   }
 }
 
-// حذف أصل
 export async function deleteAsset(id: string) {
   try {
     const db = await getDb()
 
-    // الحصول على معلومات الأصل قبل الحذف
     const asset = await db.collection("assets").findOne({ id })
 
     if (asset) {
-      // تحديث عدد المنتجات المدرجة للبائع
       const seller = await db.collection("users").findOne({ id: asset.sellerId })
       if (seller && seller.listedAssets > 0) {
         await db
@@ -397,7 +404,6 @@ export async function deleteAsset(id: string) {
 
 // ==================== وظائف المبيعات ====================
 
-// إنشاء عملية بيع جديدة
 export async function createSale(saleData: Omit<Sale, "_id" | "createdAt" | "updatedAt" | "asset" | "buyer">) {
   try {
     const db = await getDb()
@@ -412,7 +418,6 @@ export async function createSale(saleData: Omit<Sale, "_id" | "createdAt" | "upd
 
     const result = await db.collection("sales").insertOne(newSale)
 
-    // تحديث عدد المبيعات للبائع
     const seller = await db.collection("users").findOne({ id: saleData.sellerId })
     if (seller) {
       await db
@@ -427,14 +432,12 @@ export async function createSale(saleData: Omit<Sale, "_id" | "createdAt" | "upd
   }
 }
 
-// الحصول على أحدث المبيعات
 export async function getRecentSales(limit = 5) {
   try {
     const db = await getDb()
 
     const sales = await db.collection("sales").find().sort({ date: -1 }).limit(limit).toArray()
 
-    // الحصول على معلومات الأصول والمشترين
     const assetIds = [...new Set(sales.map((sale) => sale.assetId))]
     const buyerIds = [...new Set(sales.map((sale) => sale.buyerId))]
 
@@ -448,7 +451,6 @@ export async function getRecentSales(limit = 5) {
       .find({ id: { $in: buyerIds } })
       .toArray()
 
-    // دمج المعلومات
     const salesWithDetails = sales.map((sale) => {
       const asset = assets.find((a) => a.id === sale.assetId)
       const buyer = buyers.find((b) => b.id === sale.buyerId)
@@ -491,7 +493,6 @@ export async function getRecentSales(limit = 5) {
 
 // ==================== وظائف التقييمات ====================
 
-// إنشاء تقييم جديد
 export async function createReview(reviewData: Omit<Review, "_id" | "createdAt" | "updatedAt" | "user">) {
   try {
     const db = await getDb()
@@ -505,7 +506,6 @@ export async function createReview(reviewData: Omit<Review, "_id" | "createdAt" 
 
     const result = await db.collection("reviews").insertOne(newReview)
 
-    // تحديث تقييم الأصل
     const asset = await db.collection("assets").findOne({ id: reviewData.assetId })
     if (asset) {
       const totalRating = asset.rating * asset.ratingCount + reviewData.rating
@@ -527,21 +527,18 @@ export async function createReview(reviewData: Omit<Review, "_id" | "createdAt" 
   }
 }
 
-// الحصول على تقييمات أصل
 export async function getAssetReviews(assetId: string) {
   try {
     const db = await getDb()
 
     const reviews = await db.collection("reviews").find({ assetId }).toArray()
 
-    // الحصول على معلومات المستخدمين
     const userIds = [...new Set(reviews.map((review) => review.userId))]
     const users = await db
       .collection("users")
       .find({ id: { $in: userIds } })
       .toArray()
 
-    // دمج المعلومات
     const reviewsWithDetails = reviews.map((review) => {
       const user = users.find((u) => u.id === review.userId)
 
@@ -570,11 +567,10 @@ export async function getAssetReviews(assetId: string) {
 
 // ==================== وظائف الصور ====================
 
-// تخزين صورة جديدة
 export async function storeImage(imageData: {
   filename: string
   contentType: string
-  data: string // Base64 encoded image data
+  data: string
   uploadedBy: string
 }) {
   try {
@@ -600,7 +596,6 @@ export async function storeImage(imageData: {
   }
 }
 
-// الحصول على صورة بواسطة المعرف
 export async function getImageById(id: string) {
   try {
     const db = await getDb()
@@ -612,7 +607,6 @@ export async function getImageById(id: string) {
   }
 }
 
-// حذف صورة
 export async function deleteImage(id: string) {
   try {
     const db = await getDb()
@@ -626,7 +620,6 @@ export async function deleteImage(id: string) {
 
 // ==================== وظائف حسابات الجوائز ====================
 
-// إنشاء حساب جائزة جديد
 export async function createPrizeAccount(
   accountData: Omit<PrizeAccount, "_id" | "createdAt" | "updatedAt" | "claimed" | "claimedBy" | "claimedAt">,
 ) {
@@ -651,7 +644,6 @@ export async function createPrizeAccount(
   }
 }
 
-// الحصول على حساب جائزة غير مطالب به بواسطة النوع
 export async function getUnclaimedPrizeAccountByType(type: "empty" | "bloxfruit" | "medium" | "premium") {
   try {
     const db = await getDb()
@@ -663,7 +655,6 @@ export async function getUnclaimedPrizeAccountByType(type: "empty" | "bloxfruit"
   }
 }
 
-// المطالبة بحساب جائزة
 export async function claimPrizeAccount(accountId: string, userId: string) {
   try {
     const db = await getDb()
@@ -683,7 +674,6 @@ export async function claimPrizeAccount(accountId: string, userId: string) {
   }
 }
 
-// الحصول على حسابات الجوائز المطالب بها من قبل مستخدم
 export async function getUserClaimedPrizeAccounts(userId: string) {
   try {
     const db = await getDb()
@@ -695,7 +685,6 @@ export async function getUserClaimedPrizeAccounts(userId: string) {
   }
 }
 
-// الحصول على جميع حسابات الجوائز (للمسؤولين)
 export async function getAllPrizeAccounts() {
   try {
     const db = await getDb()
@@ -709,7 +698,6 @@ export async function getAllPrizeAccounts() {
 
 // ==================== وظائف سجل عجلة الحظ ====================
 
-// تسجيل دوران عجلة الحظ
 export async function recordLuckyWheelSpin(spinData: Omit<LuckyWheelSpin, "_id" | "createdAt" | "updatedAt">) {
   try {
     const db = await getDb()
@@ -729,7 +717,6 @@ export async function recordLuckyWheelSpin(spinData: Omit<LuckyWheelSpin, "_id" 
   }
 }
 
-// الحصول على آخر دوران لعجلة الحظ للمستخدم
 export async function getLastUserLuckyWheelSpin(userId: string) {
   try {
     const db = await getDb()
@@ -741,7 +728,6 @@ export async function getLastUserLuckyWheelSpin(userId: string) {
   }
 }
 
-// التحقق مما إذا كان المستخدم يمكنه الدوران
 export async function canUserSpin(userId: string) {
   try {
     const lastSpin = await getLastUserLuckyWheelSpin(userId)

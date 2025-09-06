@@ -1,8 +1,10 @@
 import NextAuth, { type NextAuthOptions } from "next-auth"
-import DiscordProvider from "next-auth/providers/discord"
-import { getUserByDiscordId, createUser, updateUser } from "@/lib/db"
+import GoogleProvider from "next-auth/providers/google"
+import CredentialsProvider from "next-auth/providers/credentials"
+import { getUserByEmail, createUser, updateUser } from "@/lib/db"
+import bcrypt from "bcryptjs"
 
-// تعريف أنواع البيانات المتوقعة من Discord
+// تعريف أنواع البيانات المتوقعة
 declare module "next-auth" {
   interface Session {
     user: {
@@ -10,7 +12,7 @@ declare module "next-auth" {
       name?: string | null
       email?: string | null
       image?: string | null
-      discordId?: string | null
+      provider?: string
     }
   }
 }
@@ -18,83 +20,148 @@ declare module "next-auth" {
 declare module "next-auth/jwt" {
   interface JWT {
     id?: string
-    discordId?: string
+    provider?: string
   }
 }
 
-// استخدام بيانات الاعتماد الجديدة
-const DISCORD_CLIENT_ID = "1352065270382071881"
-const DISCORD_CLIENT_SECRET = "7AJkLEKW6BusaWJCmGbfOBtuAB0LOXnC"
-
 export const authOptions: NextAuthOptions = {
   providers: [
-    DiscordProvider({
-      clientId: DISCORD_CLIENT_ID,
-      clientSecret: DISCORD_CLIENT_SECRET,
-      authorization: {
-        params: {
-          scope: "identify", // Eliminamos "email" ya que no lo necesitamos
-        },
+    GoogleProvider({
+      clientId: process.env.GOOGLE_CLIENT_ID || "",
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET || "",
+    }),
+    CredentialsProvider({
+      name: "credentials",
+      credentials: {
+        email: { label: "Email", type: "email" },
+        password: { label: "Password", type: "password" },
+        name: { label: "Name", type: "text", optional: true },
+        isSignUp: { label: "Is Sign Up", type: "text", optional: true },
+      },
+      async authorize(credentials) {
+        if (!credentials?.email || !credentials?.password) {
+          return null
+        }
+
+        try {
+          const isSignUp = credentials.isSignUp === "true"
+
+          if (isSignUp) {
+            // التسجيل
+            if (!credentials.name) {
+              throw new Error("الاسم مطلوب للتسجيل")
+            }
+
+            // التحقق من وجود المستخدم
+            const existingUser = await getUserByEmail(credentials.email)
+            if (existingUser) {
+              throw new Error("البريد الإلكتروني مستخدم بالفعل")
+            }
+
+            // تشفير كلمة المرور
+            const hashedPassword = await bcrypt.hash(credentials.password, 12)
+
+            // إنشاء المستخدم الجديد
+            const newUser = await createUser({
+              id: crypto.randomUUID(),
+              username: credentials.name,
+              email: credentials.email,
+              avatar: "/placeholder.svg",
+              provider: "credentials",
+              password: hashedPassword,
+              badges: ["عضو جديد"],
+              joinDate: new Date().toISOString(),
+              totalSales: 0,
+              listedAssets: 0,
+              averageRating: 0,
+              emailVerified: false,
+            })
+
+            return {
+              id: newUser.id,
+              name: newUser.username,
+              email: newUser.email,
+              image: newUser.avatar,
+            }
+          } else {
+            // تسجيل الدخول
+            const user = await getUserByEmail(credentials.email)
+            if (!user) {
+              throw new Error("البريد الإلكتروني أو كلمة المرور غير صحيحة")
+            }
+
+            if (!user.password) {
+              throw new Error("هذا الحساب مسجل عبر Google، يرجى استخدام تسجيل الدخول عبر Google")
+            }
+
+            const isPasswordValid = await bcrypt.compare(credentials.password, user.password)
+            if (!isPasswordValid) {
+              throw new Error("البريد الإلكتروني أو كلمة المرور غير صحيحة")
+            }
+
+            return {
+              id: user.id,
+              name: user.username,
+              email: user.email,
+              image: user.avatar,
+            }
+          }
+        } catch (error) {
+          console.error("Auth error:", error)
+          return null
+        }
       },
     }),
   ],
-  debug: process.env.NODE_ENV === "development", // تمكين وضع التصحيح فقط في بيئة التطوير
   callbacks: {
-    async jwt({ token, account, profile }) {
-      if (account && profile) {
-        token.id = profile.id || profile.sub
-        token.discordId = profile.id || profile.sub
-        token.image =
-          profile.image ||
-          (profile.avatar ? `https://cdn.discordapp.com/avatars/${profile.id}/${profile.avatar}.png` : null)
+    async jwt({ token, account, profile, user }) {
+      if (account && user) {
+        token.id = user.id
+        token.provider = account.provider
       }
       return token
     },
     async session({ session, token }) {
       if (session.user) {
         session.user.id = (token.id as string) || ""
-        session.user.discordId = (token.discordId as string) || ""
-        session.user.image = (token.image as string) || null
+        session.user.provider = (token.provider as string) || ""
       }
       return session
     },
     async signIn({ user, account, profile }) {
       try {
-        if (!profile) return false
+        if (account?.provider === "google") {
+          if (!user.email) return false
 
-        const discordId = profile.id || profile.sub
-        if (!discordId) {
-          console.error("Discord ID is missing from profile", profile)
-          return false
-        }
+          const existingUser = await getUserByEmail(user.email)
 
-        const existingUser = await getUserByDiscordId(discordId)
+          // تحديد ما إذا كان المستخدم مسؤولاً (يمكنك تغيير هذا البريد الإلكتروني)
+          const isAdmin = user.email === "admin@example.com"
+          const badges = isAdmin ? ["عضو جديد", "ادارة"] : ["عضو جديد"]
 
-        // Asignar rol de administración a tu cuenta (reemplaza TU_DISCORD_ID con tu ID real)
-        const isAdmin = discordId === "1014660591366971483"
-        const badges = isAdmin ? ["عضو جديد", "ادارة"] : ["عضو جديد"]
-
-        if (!existingUser) {
-          await createUser({
-            id: discordId,
-            username: profile.username || user.name || "مستخدم جديد",
-            email: profile.email || user.email,
-            avatar:
-              user.image ||
-              (profile.avatar
-                ? `https://cdn.discordapp.com/avatars/${discordId}/${profile.avatar}.png`
-                : "/placeholder.svg"),
-            discordId: discordId,
-            badges: badges,
-            joinDate: new Date().toISOString(),
-            totalSales: 0,
-            listedAssets: 0,
-            averageRating: 0,
-          })
-        } else if (isAdmin && !existingUser.badges.includes("ادارة")) {
-          // Si la cuenta ya existe pero no tiene el rol de administración, agregarlo
-          const updatedBadges = [...existingUser.badges, "ادارة"]
-          await updateUser(existingUser.id, { badges: updatedBadges })
+          if (!existingUser) {
+            const newUser = await createUser({
+              id: crypto.randomUUID(),
+              username: user.name || "مستخدم جديد",
+              email: user.email,
+              avatar: user.image || "/placeholder.svg",
+              provider: "google",
+              badges: badges,
+              joinDate: new Date().toISOString(),
+              totalSales: 0,
+              listedAssets: 0,
+              averageRating: 0,
+              emailVerified: true,
+            })
+            user.id = newUser.id
+          } else {
+            // تحديث معلومات المستخدم إذا لزم الأمر
+            if (isAdmin && !existingUser.badges.includes("ادارة")) {
+              const updatedBadges = [...existingUser.badges, "ادارة"]
+              await updateUser(existingUser.id, { badges: updatedBadges })
+            }
+            user.id = existingUser.id
+          }
         }
 
         return true
@@ -113,7 +180,6 @@ export const authOptions: NextAuthOptions = {
     maxAge: 30 * 24 * 60 * 60, // 30 days
   },
   secret: process.env.NEXTAUTH_SECRET || "YOUR_FALLBACK_SECRET_KEY_CHANGE_THIS",
-  useSecureCookies: process.env.NODE_ENV === "production", // Usar cookies seguras solo en producción
 }
 
 const handler = NextAuth(authOptions)
