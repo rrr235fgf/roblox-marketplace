@@ -126,7 +126,7 @@ export const authOptions: NextAuthOptions = {
     strategy: "jwt",
     maxAge: 30 * 24 * 60 * 60, // 30 days
   },
-  secret: process.env.NEXTAUTH_SECRET || "YOUR_FALLBACK_SECRET_KEY_CHANGE_THIS",
+  secret: process.env.NEXTAUTH_SECRET || "5a1abe4258124e0986619f28352937e7bd22247ede7e8f21b7fdd4d77777ffec",
 }
 
 const handler = NextAuth(authOptions)
