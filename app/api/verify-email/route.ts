@@ -10,17 +10,17 @@ export async function POST(request: NextRequest) {
     }
 
     // التحقق من الرمز
-    const verification = await verifyEmailToken(token)
-    if (!verification) {
+    const verificationToken = await verifyEmailToken(token)
+    if (!verificationToken) {
       return NextResponse.json({ error: "رمز التحقق غير صحيح أو منتهي الصلاحية" }, { status: 400 })
     }
 
     // تحديث حالة التحقق للمستخدم
-    await updateUser(verification.userId, { emailVerified: true })
+    await updateUser(verificationToken.userId, { emailVerified: true })
 
     return NextResponse.json({ message: "تم التحقق من البريد الإلكتروني بنجاح" })
   } catch (error) {
     console.error("Error verifying email:", error)
-    return NextResponse.json({ error: "حدث خطأ أثناء التحقق من البريد الإلكتروني" }, { status: 500 })
+    return NextResponse.json({ error: "فشل في التحقق من البريد الإلكتروني" }, { status: 500 })
   }
 }

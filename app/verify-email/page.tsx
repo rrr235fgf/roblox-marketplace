@@ -9,7 +9,7 @@ import { Navbar } from "@/components/navbar"
 import { useToast } from "@/hooks/use-toast"
 import { CheckCircle, XCircle } from "lucide-react"
 
-export default function VerifyEmail() {
+export default function VerifyEmailPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [isVerified, setIsVerified] = useState(false)
   const [error, setError] = useState("")
@@ -20,42 +20,43 @@ export default function VerifyEmail() {
   const token = searchParams.get("token")
 
   useEffect(() => {
-    if (!token) {
-      setError("رمز التحقق مفقود")
-      setIsLoading(false)
-      return
-    }
-
-    verifyEmail(token)
-  }, [token])
-
-  const verifyEmail = async (token: string) => {
-    try {
-      const response = await fetch("/api/verify-email", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ token }),
-      })
-
-      const data = await response.json()
-
-      if (response.ok) {
-        setIsVerified(true)
-        toast({
-          title: "تم التحقق بنجاح!",
-          description: "تم التحقق من بريدك الإلكتروني بنجاح",
-        })
-      } else {
-        setError(data.error || "حدث خطأ أثناء التحقق")
+    const verifyEmail = async () => {
+      if (!token) {
+        setError("رمز التحقق مفقود")
+        setIsLoading(false)
+        return
       }
-    } catch (error) {
-      setError("حدث خطأ أثناء التحقق من البريد الإلكتروني")
-    } finally {
-      setIsLoading(false)
+
+      try {
+        const response = await fetch("/api/verify-email", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ token }),
+        })
+
+        const data = await response.json()
+
+        if (response.ok) {
+          setIsVerified(true)
+          toast({
+            title: "تم التحقق بنجاح",
+            description: "تم التحقق من بريدك الإلكتروني بنجاح",
+          })
+        } else {
+          setError(data.error || "فشل في التحقق من البريد الإلكتروني")
+        }
+      } catch (error) {
+        console.error("Verification error:", error)
+        setError("حدث خطأ أثناء التحقق")
+      } finally {
+        setIsLoading(false)
+      }
     }
-  }
+
+    verifyEmail()
+  }, [token, toast])
 
   const handleContinue = () => {
     router.push("/login")
@@ -70,7 +71,7 @@ export default function VerifyEmail() {
             {isLoading ? (
               <>
                 <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center">
-                  <LoadingSpinner size="lg" />
+                  <LoadingSpinner />
                 </div>
                 <CardTitle className="text-2xl">جاري التحقق...</CardTitle>
                 <CardDescription>يرجى الانتظار بينما نتحقق من بريدك الإلكتروني</CardDescription>
@@ -96,7 +97,7 @@ export default function VerifyEmail() {
           {!isLoading && (
             <CardContent>
               <Button onClick={handleContinue} className="w-full">
-                {isVerified ? "تسجيل الدخول" : "العودة"}
+                {isVerified ? "تسجيل الدخول" : "العودة لتسجيل الدخول"}
               </Button>
             </CardContent>
           )}

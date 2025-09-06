@@ -1,30 +1,46 @@
-import NextAuth from "next-auth"
-import CredentialsProvider from "next-auth/providers/credentials"
+import NextAuth, { type NextAuthOptions } from "next-auth"
 import DiscordProvider from "next-auth/providers/discord"
+import CredentialsProvider from "next-auth/providers/credentials"
 import { MongoDBAdapter } from "@next-auth/mongodb-adapter"
 import { MongoClient } from "mongodb"
 import bcrypt from "bcryptjs"
-import { getUserByEmail, createUser } from "@/lib/db"
 
 const client = new MongoClient(process.env.MONGODB_URI!)
 const clientPromise = Promise.resolve(client)
 
-const handler = NextAuth({
+declare module "next-auth" {
+  interface Session {
+    user: {
+      id: string
+      name?: string | null
+      email?: string | null
+      image?: string | null
+    }
+  }
+}
+
+declare module "next-auth/jwt" {
+  interface JWT {
+    id?: string
+  }
+}
+
+export const authOptions: NextAuthOptions = {
   adapter: MongoDBAdapter(clientPromise),
   providers: [
-    // Discord Provider (للمستخدمين القدامى)
+    // Discord Provider للمستخدمين القدامى
     DiscordProvider({
       clientId: process.env.DISCORD_CLIENT_ID!,
       clientSecret: process.env.DISCORD_CLIENT_SECRET!,
     }),
-    // Credentials Provider (للتسجيل الجديد)
+    // Credentials Provider للتسجيل الجديد
     CredentialsProvider({
       name: "credentials",
       credentials: {
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
-        action: { label: "Action", type: "text" }, // "login" or "register"
-        name: { label: "Name", type: "text" },
+        name: { label: "Name", type: "text", optional: true },
+        action: { label: "Action", type: "text" },
       },
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) {
@@ -32,32 +48,38 @@ const handler = NextAuth({
         }
 
         try {
+          const db = client.db("roblox_marketplace")
+
           if (credentials.action === "register") {
             // التحقق من وجود المستخدم
-            const existingUser = await getUserByEmail(credentials.email)
+            const existingUser = await db.collection("users").findOne({ email: credentials.email })
             if (existingUser) {
               throw new Error("هذا البريد الإلكتروني مستخدم بالفعل")
             }
 
             // إنشاء مستخدم جديد
             const hashedPassword = await bcrypt.hash(credentials.password, 12)
-            const newUser = await createUser({
+            const newUser = {
+              name: credentials.name || credentials.email.split("@")[0],
               email: credentials.email,
               password: hashedPassword,
-              name: credentials.name || credentials.email.split("@")[0],
               image: null,
               emailVerified: new Date(), // تفعيل تلقائي
-            })
+              createdAt: new Date(),
+              updatedAt: new Date(),
+            }
+
+            const result = await db.collection("users").insertOne(newUser)
 
             return {
-              id: newUser.id,
-              email: newUser.email,
+              id: result.insertedId.toString(),
               name: newUser.name,
+              email: newUser.email,
               image: newUser.image,
             }
           } else {
             // تسجيل دخول
-            const user = await getUserByEmail(credentials.email)
+            const user = await db.collection("users").findOne({ email: credentials.email })
             if (!user || !user.password) {
               throw new Error("بيانات الدخول غير صحيحة")
             }
@@ -68,9 +90,9 @@ const handler = NextAuth({
             }
 
             return {
-              id: user.id,
-              email: user.email,
+              id: user._id.toString(),
               name: user.name,
+              email: user.email,
               image: user.image,
             }
           }
@@ -85,14 +107,14 @@ const handler = NextAuth({
     strategy: "jwt",
   },
   callbacks: {
-    async jwt({ token, user }) {
+    async jwt({ token, user, account }) {
       if (user) {
         token.id = user.id
       }
       return token
     },
     async session({ session, token }) {
-      if (token) {
+      if (token && session.user) {
         session.user.id = token.id as string
       }
       return session
@@ -101,6 +123,9 @@ const handler = NextAuth({
   pages: {
     signIn: "/login",
   },
-})
+  secret: process.env.NEXTAUTH_SECRET,
+}
+
+const handler = NextAuth(authOptions)
 
 export { handler as GET, handler as POST }

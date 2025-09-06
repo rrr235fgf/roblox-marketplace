@@ -16,10 +16,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "المستخدم غير موجود" }, { status: 404 })
     }
 
-    if (user.emailVerified) {
-      return NextResponse.json({ error: "البريد الإلكتروني محقق بالفعل" }, { status: 400 })
-    }
-
     // إنشاء رمز التحقق
     const token = await createEmailVerificationToken(user.id, email)
 
@@ -29,6 +25,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ message: "تم إرسال رسالة التحقق بنجاح" })
   } catch (error) {
     console.error("Error sending verification email:", error)
-    return NextResponse.json({ error: "حدث خطأ أثناء إرسال رسالة التحقق" }, { status: 500 })
+    return NextResponse.json({ error: "فشل في إرسال رسالة التحقق" }, { status: 500 })
   }
 }

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { signIn, getSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
 import { zodResolver } from "@hookform/resolvers/zod"
@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Navbar } from "@/components/navbar"
 import { LoadingSpinner } from "@/components/loading-spinner"
-import { toast } from "@/hooks/use-toast"
+import { useToast } from "@/hooks/use-toast"
 import { DiscordIcon } from "@/components/discord-icon"
 
 const loginSchema = z.object({
@@ -35,8 +35,20 @@ const registerSchema = z
 
 export default function LoginPage() {
   const router = useRouter()
+  const { toast } = useToast()
   const [isLoading, setIsLoading] = useState(false)
   const [activeTab, setActiveTab] = useState("login")
+
+  // التحقق من الجلسة الحالية
+  useEffect(() => {
+    const checkSession = async () => {
+      const session = await getSession()
+      if (session) {
+        router.push("/dashboard")
+      }
+    }
+    checkSession()
+  }, [router])
 
   const loginForm = useForm<z.infer<typeof loginSchema>>({
     resolver: zodResolver(loginSchema),
@@ -76,12 +88,10 @@ export default function LoginPage() {
         return
       }
 
-      // التحقق من الجلسة
-      const session = await getSession()
-      if (session) {
+      if (result?.ok) {
         toast({
           title: "تم تسجيل الدخول بنجاح",
-          description: `مرحباً ${session.user?.name || session.user?.email}`,
+          description: "مرحباً بك في سوق المنتجات",
         })
         router.push("/dashboard")
       }
@@ -118,12 +128,10 @@ export default function LoginPage() {
         return
       }
 
-      // التحقق من الجلسة
-      const session = await getSession()
-      if (session) {
+      if (result?.ok) {
         toast({
           title: "تم إنشاء الحساب بنجاح",
-          description: `مرحباً ${session.user?.name}`,
+          description: "مرحباً بك في سوق المنتجات",
         })
         router.push("/dashboard")
       }
@@ -150,7 +158,6 @@ export default function LoginPage() {
         description: "حدث خطأ أثناء تسجيل الدخول بـ Discord",
         variant: "destructive",
       })
-    } finally {
       setIsLoading(false)
     }
   }
