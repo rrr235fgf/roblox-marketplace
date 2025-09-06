@@ -8,9 +8,22 @@ import { ModeToggle } from "@/components/mode-toggle"
 import { SearchDialog } from "@/components/search-dialog"
 import { TermsDialog } from "@/components/terms-dialog"
 import { DiscordLogo } from "@/components/discord-logo"
+import { Logo } from "@/components/logo"
 import { useAuth } from "@/hooks/use-auth"
 import { cn } from "@/lib/utils"
-import { Menu, X, ChevronDown, User, LogOut, Settings, Package, Gift } from "lucide-react"
+import {
+  Menu,
+  X,
+  ChevronDown,
+  User,
+  LogOut,
+  Settings,
+  Package,
+  Home,
+  ShoppingBag,
+  Calculator,
+  UserSearch,
+} from "lucide-react"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -39,6 +52,34 @@ export function Navbar() {
     setIsMenuOpen(false)
   }, [pathname])
 
+  const navItems = [
+    {
+      href: "/",
+      label: "الرئيسية",
+      icon: Home,
+      isActive: pathname === "/",
+    },
+    {
+      href: "/assets",
+      label: "المنتجات",
+      icon: ShoppingBag,
+      isActive: pathname === "/assets" || pathname.startsWith("/assets/"),
+    },
+  ]
+
+  const toolsItems = [
+    {
+      href: "/account-info",
+      label: "معلومات الحساب",
+      icon: UserSearch,
+    },
+    {
+      href: "/calculators",
+      label: "حسابات الضرائب",
+      icon: Calculator,
+    },
+  ]
+
   return (
     <header
       className={cn(
@@ -47,55 +88,49 @@ export function Navbar() {
       )}
     >
       <div className="container flex h-16 items-center justify-between">
-        <div className="flex items-center gap-2 md:gap-6">
-          <Link href="/" className="hidden items-center space-x-2 md:flex">
-            <span className="text-xl font-bold">Roblox Marketplace</span>
-          </Link>
+        <div className="flex items-center gap-2 md:gap-8">
+          <Logo />
 
-          <nav className="hidden gap-6 md:flex">
-            <Link
-              href="/"
-              className={cn(
-                "text-sm font-medium transition-colors hover:text-primary",
-                pathname === "/" ? "text-primary" : "text-muted-foreground",
-              )}
-            >
-              الرئيسية
-            </Link>
-            <Link
-              href="/assets"
-              className={cn(
-                "text-sm font-medium transition-colors hover:text-primary",
-                pathname === "/assets" || pathname.startsWith("/assets/") ? "text-primary" : "text-muted-foreground",
-              )}
-            >
-              المنتجات
-            </Link>
+          <nav className="hidden gap-1 md:flex">
+            {navItems.map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={cn(
+                  "flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground",
+                  item.isActive ? "bg-accent text-accent-foreground" : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                <item.icon className="h-4 w-4" />
+                {item.label}
+              </Link>
+            ))}
+
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
-                  variant="link"
+                  variant="ghost"
                   className={cn(
-                    "group flex items-center gap-1 px-0 text-sm font-medium transition-colors hover:text-primary",
-                    pathname === "/account-info" || pathname === "/calculators" || pathname === "/lucky-wheel"
-                      ? "text-primary"
-                      : "text-muted-foreground",
+                    "group flex items-center gap-2 px-3 py-2 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground",
+                    pathname === "/account-info" || pathname === "/calculators"
+                      ? "bg-accent text-accent-foreground"
+                      : "text-muted-foreground hover:text-foreground",
                   )}
                 >
+                  <Calculator className="h-4 w-4" />
                   الأدوات
-                  <ChevronDown className="h-4 w-4 transition-transform group-data-[state=open]:rotate-180" />
+                  <ChevronDown className="h-3 w-3 transition-transform group-data-[state=open]:rotate-180" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="start">
-                <DropdownMenuItem asChild>
-                  <Link href="/account-info">معلومات الحساب</Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem asChild>
-                  <Link href="/calculators">حسابات الضرائب</Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem asChild>
-                  <Link href="/lucky-wheel">عجلة الحظ</Link>
-                </DropdownMenuItem>
+              <DropdownMenuContent align="start" className="w-48">
+                {toolsItems.map((item) => (
+                  <DropdownMenuItem key={item.href} asChild>
+                    <Link href={item.href} className="flex items-center gap-2">
+                      <item.icon className="h-4 w-4" />
+                      {item.label}
+                    </Link>
+                  </DropdownMenuItem>
+                ))}
               </DropdownMenuContent>
             </DropdownMenu>
           </nav>
@@ -117,7 +152,7 @@ export function Navbar() {
                   />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
+              <DropdownMenuContent align="end" className="w-56">
                 <DropdownMenuLabel>
                   <div className="flex flex-col space-y-1">
                     <p className="text-sm font-medium leading-none">{user.username}</p>
@@ -141,12 +176,6 @@ export function Navbar() {
                   <Link href="/dashboard/my-assets" className="cursor-pointer">
                     <Package className="mr-2 h-4 w-4" />
                     <span>منتجاتي</span>
-                  </Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem asChild>
-                  <Link href="/lucky-wheel" className="cursor-pointer">
-                    <Gift className="mr-2 h-4 w-4" />
-                    <span>عجلة الحظ</span>
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
@@ -177,54 +206,37 @@ export function Navbar() {
 
       {isMenuOpen && (
         <div className="container pb-3 md:hidden">
-          <nav className="flex flex-col space-y-3">
-            <Link
-              href="/"
-              className={cn(
-                "block rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-accent",
-                pathname === "/" ? "bg-accent text-foreground" : "text-muted-foreground",
-              )}
-            >
-              الرئيسية
-            </Link>
-            <Link
-              href="/assets"
-              className={cn(
-                "block rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-accent",
-                pathname === "/assets" || pathname.startsWith("/assets/")
-                  ? "bg-accent text-foreground"
-                  : "text-muted-foreground",
-              )}
-            >
-              المنتجات
-            </Link>
-            <Link
-              href="/account-info"
-              className={cn(
-                "block rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-accent",
-                pathname === "/account-info" ? "bg-accent text-foreground" : "text-muted-foreground",
-              )}
-            >
-              معلومات الحساب
-            </Link>
-            <Link
-              href="/calculators"
-              className={cn(
-                "block rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-accent",
-                pathname === "/calculators" ? "bg-accent text-foreground" : "text-muted-foreground",
-              )}
-            >
-              حسابات الضرائب
-            </Link>
-            <Link
-              href="/lucky-wheel"
-              className={cn(
-                "block rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-accent",
-                pathname === "/lucky-wheel" ? "bg-accent text-foreground" : "text-muted-foreground",
-              )}
-            >
-              عجلة الحظ
-            </Link>
+          <nav className="flex flex-col space-y-2">
+            {navItems.map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={cn(
+                  "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-accent",
+                  item.isActive ? "bg-accent text-foreground" : "text-muted-foreground",
+                )}
+              >
+                <item.icon className="h-4 w-4" />
+                {item.label}
+              </Link>
+            ))}
+
+            <div className="border-t pt-2">
+              <p className="px-3 py-1 text-xs font-semibold text-muted-foreground">الأدوات</p>
+              {toolsItems.map((item) => (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={cn(
+                    "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-accent",
+                    pathname === item.href ? "bg-accent text-foreground" : "text-muted-foreground",
+                  )}
+                >
+                  <item.icon className="h-4 w-4" />
+                  {item.label}
+                </Link>
+              ))}
+            </div>
           </nav>
         </div>
       )}

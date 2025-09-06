@@ -1,332 +1,254 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
-import { Card, CardContent } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { motion, AnimatePresence } from "framer-motion"
-import { Gift, Clock, Trophy, AlertTriangle, Sparkles } from "lucide-react"
-import confetti from "canvas-confetti"
-import { useToast } from "@/components/ui/use-toast"
+import type React from "react"
 
-// تعريف الجوائز ونسبها
-const prizes = [
-  { id: 1, name: "حساب فاضي", probability: 50, color: "#FF5252", icon: AlertTriangle },
-  { id: 2, name: "حساب بلوكس فروت", probability: 25, color: "#4CAF50", icon: Gift },
-  { id: 3, name: "حساب متوسط", probability: 15, color: "#2196F3", icon: Gift },
-  { id: 4, name: "حساب مشحون", probability: 10, color: "#FFC107", icon: Trophy },
+import { useState, useEffect } from "react"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
+import { Loader2, Gift, Trophy, Coins, Star } from "lucide-react"
+import { motion, AnimatePresence } from "framer-motion"
+import { toast } from "sonner"
+
+interface Prize {
+  id: string
+  name: string
+  type: "robux" | "account" | "item" | "nothing"
+  value?: number
+  probability: number
+  color: string
+  icon: React.ReactNode
+}
+
+const prizes: Prize[] = [
+  {
+    id: "robux-100",
+    name: "100 روبوكس",
+    type: "robux",
+    value: 100,
+    probability: 0.15,
+    color: "#10B981",
+    icon: <Coins className="h-6 w-6" />,
+  },
+  {
+    id: "account",
+    name: "حساب مجاني",
+    type: "account",
+    probability: 0.05,
+    color: "#8B5CF6",
+    icon: <Trophy className="h-6 w-6" />,
+  },
+  {
+    id: "item",
+    name: "عنصر نادر",
+    type: "item",
+    probability: 0.2,
+    color: "#F59E0B",
+    icon: <Gift className="h-6 w-6" />,
+  },
+  {
+    id: "nothing",
+    name: "حظ أوفر المرة القادمة",
+    type: "nothing",
+    probability: 0.6,
+    color: "#6B7280",
+    icon: <Star className="h-6 w-6" />,
+  },
 ]
 
-// حساب الزوايا لكل جائزة
-const calculateSegments = () => {
-  const segments = []
-  let startAngle = 0
-
-  prizes.forEach((prize) => {
-    const angle = (prize.probability / 100) * 360
-    segments.push({
-      ...prize,
-      startAngle,
-      endAngle: startAngle + angle,
-      midAngle: startAngle + angle / 2,
-    })
-    startAngle += angle
-  })
-
-  return segments
-}
-
-interface LuckyWheelProps {
-  userId: string
-}
-
-export function LuckyWheel({ userId }: LuckyWheelProps) {
+export function LuckyWheel() {
   const [isSpinning, setIsSpinning] = useState(false)
+  const [canSpin, setCanSpin] = useState(true)
+  const [timeLeft, setTimeLeft] = useState(0)
+  const [selectedPrize, setSelectedPrize] = useState<Prize | null>(null)
   const [rotation, setRotation] = useState(0)
-  const [winner, setWinner] = useState<any>(null)
-  const [timeLeft, setTimeLeft] = useState<number | null>(null)
-  const [nextSpinTime, setNextSpinTime] = useState<number | null>(null)
-  const wheelRef = useRef<HTMLDivElement>(null)
-  const { toast } = useToast()
-  const segments = calculateSegments()
 
-  // تحقق من وقت الدوران التالي عند تحميل المكون
   useEffect(() => {
-    const storageKey = `lucky-wheel-${userId}`
-    const savedTime = localStorage.getItem(storageKey)
+    const lastSpin = localStorage.getItem("lastWheelSpin")
+    if (lastSpin) {
+      const timeDiff = Date.now() - Number.parseInt(lastSpin)
+      const hoursLeft = 24 - Math.floor(timeDiff / (1000 * 60 * 60))
 
-    if (savedTime) {
-      const nextTime = Number.parseInt(savedTime, 10)
-      const now = Date.now()
+      if (hoursLeft > 0) {
+        setCanSpin(false)
+        setTimeLeft(hoursLeft)
 
-      if (now < nextTime) {
-        setNextSpinTime(nextTime)
-        setTimeLeft(Math.ceil((nextTime - now) / 1000))
-      } else {
-        localStorage.removeItem(storageKey)
+        const interval = setInterval(() => {
+          const newTimeDiff = Date.now() - Number.parseInt(lastSpin)
+          const newHoursLeft = 24 - Math.floor(newTimeDiff / (1000 * 60 * 60))
+
+          if (newHoursLeft <= 0) {
+            setCanSpin(true)
+            setTimeLeft(0)
+            clearInterval(interval)
+          } else {
+            setTimeLeft(newHoursLeft)
+          }
+        }, 60000)
+
+        return () => clearInterval(interval)
       }
     }
-  }, [userId])
+  }, [])
 
-  // تحديث العد التنازلي
-  useEffect(() => {
-    if (timeLeft === null || timeLeft <= 0) return
-
-    const timer = setInterval(() => {
-      setTimeLeft((prev) => {
-        if (prev === null || prev <= 1) {
-          clearInterval(timer)
-          setNextSpinTime(null)
-          return null
-        }
-        return prev - 1
-      })
-    }, 1000)
-
-    return () => clearInterval(timer)
-  }, [timeLeft])
-
-  // تنسيق الوقت المتبقي
-  const formatTimeLeft = () => {
-    if (timeLeft === null) return ""
-
-    const hours = Math.floor(timeLeft / 3600)
-    const minutes = Math.floor((timeLeft % 3600) / 60)
-    const seconds = timeLeft % 60
-
-    return `${hours.toString().padStart(2, "0")}:${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`
-  }
-
-  // دالة لإطلاق الألعاب النارية عند الفوز
-  const triggerWinAnimation = (prize: any) => {
-    if (prize.id !== 1) {
-      // ليس حساب فاضي
-      const canvas = document.createElement("canvas")
-      canvas.style.position = "fixed"
-      canvas.style.inset = "0"
-      canvas.style.width = "100vw"
-      canvas.style.height = "100vh"
-      canvas.style.zIndex = "999"
-      canvas.style.pointerEvents = "none"
-      document.body.appendChild(canvas)
-
-      const myConfetti = confetti.create(canvas, {
-        resize: true,
-        useWorker: true,
-      })
-
-      myConfetti({
-        particleCount: 100,
-        spread: 160,
-        origin: { y: 0.6 },
-        colors: [prize.color, "#ffffff", "#9c27b0"],
-      })
-
-      setTimeout(() => {
-        document.body.removeChild(canvas)
-      }, 3000)
-    }
-  }
-
-  // دالة لتدوير العجلة
   const spinWheel = () => {
-    if (isSpinning || timeLeft !== null) return
+    if (!canSpin || isSpinning) return
 
     setIsSpinning(true)
-    setWinner(null)
 
-    // اختيار الفائز بناءً على الاحتمالات
-    const random = Math.random() * 100
+    // Generate random prize based on probabilities
+    const random = Math.random()
     let cumulativeProbability = 0
-    let selectedPrize = prizes[0]
+    let wonPrize = prizes[prizes.length - 1] // Default to "nothing"
 
     for (const prize of prizes) {
       cumulativeProbability += prize.probability
       if (random <= cumulativeProbability) {
-        selectedPrize = prize
+        wonPrize = prize
         break
       }
     }
 
-    // حساب زاوية الدوران
-    const selectedSegment = segments.find((segment) => segment.id === selectedPrize.id)
-    const targetAngle = 360 - selectedSegment!.midAngle
-    const spins = 5 // عدد الدورات الكاملة
-    const spinAngle = 360 * spins + targetAngle + Math.random() * 30 - 15 // إضافة عشوائية صغيرة
+    // Calculate rotation
+    const spins = 5 + Math.random() * 5 // 5-10 full rotations
+    const prizeIndex = prizes.findIndex((p) => p.id === wonPrize.id)
+    const prizeAngle = (360 / prizes.length) * prizeIndex
+    const finalRotation = rotation + spins * 360 + prizeAngle
 
-    // تعيين الدوران
-    setRotation(spinAngle)
+    setRotation(finalRotation)
 
-    // بعد انتهاء الدوران
     setTimeout(() => {
+      setSelectedPrize(wonPrize)
       setIsSpinning(false)
-      setWinner(selectedPrize)
-      triggerWinAnimation(selectedPrize)
+      setCanSpin(false)
 
-      // حفظ وقت الدوران التالي
-      const now = Date.now()
-      const nextTime = now + 24 * 60 * 60 * 1000 // 24 ساعة
-      localStorage.setItem(`lucky-wheel-${userId}`, nextTime.toString())
-      setNextSpinTime(nextTime)
-      setTimeLeft(24 * 60 * 60) // 24 ساعة بالثواني
+      // Store spin time
+      localStorage.setItem("lastWheelSpin", Date.now().toString())
+      setTimeLeft(24)
 
-      // إظهار رسالة النتيجة
-      toast({
-        title: selectedPrize.id === 1 ? "للأسف لم تربح هذه المرة" : "مبروك! لقد ربحت",
-        description: `النتيجة: ${selectedPrize.name}`,
-        variant: selectedPrize.id === 1 ? "destructive" : "default",
-      })
-    }, 5000) // وقت الدوران
+      // Show result
+      if (wonPrize.type === "nothing") {
+        toast.error("حظ أوفر المرة القادمة! 😔")
+      } else {
+        toast.success(`تهانينا! لقد ربحت: ${wonPrize.name} 🎉`)
+      }
+    }, 3000)
   }
 
   return (
-    <Card className="overflow-hidden shadow-lg border-primary/20">
-      <CardContent className="p-6">
-        <div className="relative overflow-hidden rounded-xl bg-gradient-to-r from-primary/10 to-purple-500/10 p-6 mb-6">
-          <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-primary/20 via-transparent to-transparent opacity-60"></div>
-          <div className="relative z-10 flex items-center gap-3">
-            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/20 shadow-[0_0_10px_rgba(var(--primary-rgb),0.5)]">
-              <Gift className="h-6 w-6 text-primary" />
-            </div>
-            <div>
-              <h2 className="text-xl font-bold">عجلة الحظ</h2>
-              <p className="text-sm text-muted-foreground">
-                جرب حظك واربح حسابات روبلوكس مجانية! يمكنك لف العجلة مرة واحدة كل 24 ساعة
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <div className="grid gap-8 md:grid-cols-2">
-          <div className="flex flex-col items-center justify-center">
-            <div className="relative w-64 h-64 md:w-80 md:h-80">
-              {/* مؤشر العجلة */}
-              <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 w-0 h-0 border-l-[15px] border-r-[15px] border-t-[30px] border-l-transparent border-r-transparent border-t-primary z-20" />
-
-              {/* العجلة */}
-              <motion.div
-                ref={wheelRef}
-                className="w-full h-full rounded-full overflow-hidden border-8 border-primary/30 shadow-[0_0_15px_rgba(var(--primary-rgb),0.3)] relative"
-                style={{
-                  transformOrigin: "center",
-                  backgroundImage: `conic-gradient(${segments
-                    .map((segment) => `${segment.color} 0deg ${segment.endAngle}deg`)
-                    .join(", ")})`,
-                }}
-                animate={{ rotate: rotation }}
-                transition={{ duration: 5, ease: "easeOut" }}
-              >
-                {/* أسماء الجوائز */}
-                {segments.map((segment) => (
+    <div className="max-w-2xl mx-auto space-y-6">
+      <Card>
+        <CardHeader className="text-center">
+          <CardTitle className="text-2xl font-bold">عجلة الحظ</CardTitle>
+          <p className="text-muted-foreground">اربح جوائز مذهلة! يمكنك اللعب مرة واحدة كل 24 ساعة</p>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          {/* Wheel */}
+          <div className="relative mx-auto w-80 h-80">
+            <motion.div
+              className="w-full h-full rounded-full border-8 border-primary relative overflow-hidden"
+              animate={{ rotate: rotation }}
+              transition={{ duration: 3, ease: "easeOut" }}
+            >
+              {prizes.map((prize, index) => {
+                const angle = (360 / prizes.length) * index
+                return (
                   <div
-                    key={segment.id}
-                    className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-white font-bold text-center w-full h-full flex items-center justify-center"
+                    key={prize.id}
+                    className="absolute w-full h-full"
                     style={{
-                      transform: `rotate(${segment.midAngle}deg) translateY(-35%)`,
-                      transformOrigin: "center",
-                      textShadow: "0 1px 2px rgba(0,0,0,0.6)",
+                      transform: `rotate(${angle}deg)`,
+                      clipPath: `polygon(50% 50%, 50% 0%, ${50 + 50 * Math.cos(((360 / prizes.length) * Math.PI) / 180)}% ${50 - 50 * Math.sin(((360 / prizes.length) * Math.PI) / 180)}%)`,
                     }}
                   >
-                    <div className="flex flex-col items-center rotate-180">
-                      <segment.icon className="h-6 w-6 mb-1" />
-                      <span className="text-xs md:text-sm">{segment.name}</span>
+                    <div
+                      className="w-full h-full flex items-center justify-center"
+                      style={{ backgroundColor: prize.color }}
+                    >
+                      <div className="text-white text-center transform -rotate-45">
+                        {prize.icon}
+                        <p className="text-xs font-bold mt-1">{prize.name}</p>
+                      </div>
                     </div>
                   </div>
-                ))}
-              </motion.div>
-            </div>
+                )
+              })}
+            </motion.div>
 
+            {/* Pointer */}
+            <div className="absolute top-0 left-1/2 transform -translate-x-1/2 -translate-y-2">
+              <div className="w-0 h-0 border-l-4 border-r-4 border-b-8 border-l-transparent border-r-transparent border-b-primary"></div>
+            </div>
+          </div>
+
+          {/* Spin Button */}
+          <div className="text-center space-y-4">
             <Button
               onClick={spinWheel}
-              disabled={isSpinning || timeLeft !== null}
-              className="mt-8 px-8 py-2 text-lg bg-gradient-to-r from-primary to-purple-600 hover:from-primary/90 hover:to-purple-500 transition-all duration-300 shadow-lg hover:shadow-primary/20 hover:scale-105"
+              disabled={!canSpin || isSpinning}
+              size="lg"
+              className="px-8 py-3 text-lg font-bold"
             >
-              {isSpinning ? "جاري الدوران..." : timeLeft !== null ? "انتظر للدوران التالي" : "لف العجلة"}
+              {isSpinning ? (
+                <>
+                  <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                  جاري الدوران...
+                </>
+              ) : canSpin ? (
+                "ادر العجلة!"
+              ) : (
+                `انتظر ${timeLeft} ساعة`
+              )}
             </Button>
 
-            {timeLeft !== null && (
-              <div className="mt-4 flex items-center gap-2 text-muted-foreground">
-                <Clock className="h-4 w-4" />
-                <span>الدوران التالي بعد: {formatTimeLeft()}</span>
-              </div>
+            {!canSpin && !isSpinning && (
+              <p className="text-sm text-muted-foreground">يمكنك اللعب مرة أخرى بعد {timeLeft} ساعة</p>
             )}
           </div>
 
-          <div className="flex flex-col">
-            <div className="rounded-lg bg-muted p-4 mb-4">
-              <h3 className="text-lg font-bold mb-2 flex items-center gap-2">
-                <Gift className="h-5 w-5 text-primary" />
-                الجوائز المتاحة
-              </h3>
-              <ul className="space-y-3">
-                {prizes.map((prize) => (
-                  <li key={prize.id} className="flex items-center gap-3">
-                    <div
-                      className="w-6 h-6 rounded-full flex items-center justify-center text-white"
-                      style={{ backgroundColor: prize.color }}
-                    >
-                      <prize.icon className="h-3 w-3" />
-                    </div>
-                    <span className="font-medium">{prize.name}</span>
-                    <span className="text-sm text-muted-foreground ml-auto">{prize.probability}%</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
+          {/* Prize Display */}
+          <AnimatePresence>
+            {selectedPrize && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.8 }}
+                className="text-center p-6 bg-gradient-to-r from-purple-500/10 to-pink-500/10 rounded-lg border"
+              >
+                <div className="flex items-center justify-center gap-2 mb-2">
+                  {selectedPrize.icon}
+                  <h3 className="text-xl font-bold">{selectedPrize.name}</h3>
+                </div>
+                {selectedPrize.type !== "nothing" && (
+                  <Badge variant="secondary" className="mt-2">
+                    تهانينا! 🎉
+                  </Badge>
+                )}
+              </motion.div>
+            )}
+          </AnimatePresence>
 
-            <AnimatePresence>
-              {winner && (
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0 }}
-                  className={`rounded-lg p-6 text-center ${winner.id === 1 ? "bg-red-500/10" : "bg-gradient-to-r from-primary/20 to-purple-500/20"}`}
+          {/* Prizes List */}
+          <div className="space-y-2">
+            <h4 className="font-semibold text-center">الجوائز المتاحة:</h4>
+            <div className="grid grid-cols-2 gap-2">
+              {prizes.map((prize) => (
+                <div
+                  key={prize.id}
+                  className="flex items-center gap-2 p-2 rounded-lg border"
+                  style={{ borderColor: prize.color }}
                 >
-                  <h3 className="text-xl font-bold mb-2">
-                    {winner.id === 1 ? "للأسف لم تربح هذه المرة" : "مبروك! لقد ربحت"}
-                  </h3>
-                  <div className="flex items-center justify-center gap-2 mb-3">
-                    <div
-                      className="w-10 h-10 rounded-full flex items-center justify-center text-white"
-                      style={{ backgroundColor: winner.color }}
-                    >
-                      <winner.icon className="h-5 w-5" />
-                    </div>
-                    <span className="text-lg font-medium">{winner.name}</span>
+                  {prize.icon}
+                  <div>
+                    <p className="text-sm font-medium">{prize.name}</p>
+                    <p className="text-xs text-muted-foreground">{(prize.probability * 100).toFixed(0)}% احتمالية</p>
                   </div>
-
-                  {winner.id !== 1 && (
-                    <div className="flex justify-center">
-                      <motion.div
-                        animate={{
-                          scale: [1, 1.05, 1],
-                          rotate: [-1, 1, -1, 1, 0],
-                        }}
-                        transition={{
-                          duration: 0.5,
-                          repeat: Number.POSITIVE_INFINITY,
-                          repeatType: "reverse",
-                        }}
-                      >
-                        <Button className="bg-gradient-to-r from-primary to-purple-600">
-                          <Sparkles className="mr-2 h-4 w-4" />
-                          استلام الجائزة
-                        </Button>
-                      </motion.div>
-                    </div>
-                  )}
-                </motion.div>
-              )}
-            </AnimatePresence>
-
-            <div className="rounded-lg bg-muted p-4 mt-auto">
-              <p className="text-sm">
-                <span className="font-medium">ملاحظة:</span> يمكنك لف العجلة مرة واحدة كل 24 ساعة. استمتع بفرصتك للفوز
-                بحسابات روبلوكس مجانية!
-              </p>
+                </div>
+              ))}
             </div>
           </div>
-        </div>
-      </CardContent>
-    </Card>
+        </CardContent>
+      </Card>
+    </div>
   )
 }
