@@ -1,5 +1,6 @@
 import type { User, Asset, Sale, Review, PrizeAccount, LuckyWheelSpin } from "./models"
 import { getDb } from "./db"
+import crypto from "crypto"
 
 // اسم قاعدة البيانات
 const DB_NAME = "Marketplace"
@@ -159,18 +160,119 @@ export async function updateUser(id: string, userData: Partial<User>) {
   }
 }
 
-// التحقق من كلمة المرور
-export async function verifyPassword(email: string, password: string) {
+// ==================== وظائف التحقق من البريد الإلكتروني ====================
+
+// إنشاء رمز التحقق من البريد الإلكتروني
+export async function createEmailVerificationToken(userId: string, email: string) {
   try {
-    const user = await getUserByEmail(email)
-    if (!user || !user.password) {
-      return false
+    const db = await getDb()
+    const now = new Date()
+    const expiresAt = new Date(now.getTime() + 24 * 60 * 60 * 1000) // 24 ساعة
+    const token = crypto.randomBytes(32).toString("hex")
+
+    // حذف الرموز القديمة للمستخدم
+    await db.collection("emailVerificationTokens").deleteMany({ userId })
+
+    const verificationToken = {
+      id: crypto.randomUUID(),
+      userId,
+      email,
+      token,
+      expiresAt,
+      createdAt: now,
     }
 
-    const bcrypt = require("bcryptjs")
-    return await bcrypt.compare(password, user.password)
+    await db.collection("emailVerificationTokens").insertOne(verificationToken)
+    return token
   } catch (error) {
-    console.error("Error verifying password:", error)
+    console.error("Error creating email verification token:", error)
+    throw error
+  }
+}
+
+// التحقق من رمز البريد الإلكتروني
+export async function verifyEmailToken(token: string) {
+  try {
+    const db = await getDb()
+    const now = new Date()
+
+    const verificationToken = await db.collection("emailVerificationTokens").findOne({
+      token,
+      expiresAt: { $gt: now },
+    })
+
+    if (!verificationToken) {
+      return null
+    }
+
+    // حذف الرمز بعد الاستخدام
+    await db.collection("emailVerificationTokens").deleteOne({ _id: verificationToken._id })
+
+    return verificationToken
+  } catch (error) {
+    console.error("Error verifying email token:", error)
+    return null
+  }
+}
+
+// إنشاء رمز إعادة تعيين كلمة المرور
+export async function createPasswordResetToken(userId: string, email: string) {
+  try {
+    const db = await getDb()
+    const now = new Date()
+    const expiresAt = new Date(now.getTime() + 60 * 60 * 1000) // ساعة واحدة
+    const token = crypto.randomBytes(32).toString("hex")
+
+    // حذف الرموز القديمة للمستخدم
+    await db.collection("passwordResetTokens").deleteMany({ userId })
+
+    const resetToken = {
+      id: crypto.randomUUID(),
+      userId,
+      email,
+      token,
+      expiresAt,
+      createdAt: now,
+    }
+
+    await db.collection("passwordResetTokens").insertOne(resetToken)
+    return token
+  } catch (error) {
+    console.error("Error creating password reset token:", error)
+    throw error
+  }
+}
+
+// التحقق من رمز إعادة تعيين كلمة المرور
+export async function verifyPasswordResetToken(token: string) {
+  try {
+    const db = await getDb()
+    const now = new Date()
+
+    const resetToken = await db.collection("passwordResetTokens").findOne({
+      token,
+      expiresAt: { $gt: now },
+    })
+
+    if (!resetToken) {
+      return null
+    }
+
+    return resetToken
+  } catch (error) {
+    console.error("Error verifying password reset token:", error)
+    return null
+  }
+}
+
+// حذف رمز إعادة تعيين كلمة المرور
+export async function deletePasswordResetToken(token: string) {
+  try {
+    const db = await getDb()
+    await db.collection("passwordResetTokens").deleteOne({ token })
+    return true
+  } catch (error) {
+    console.error("Error deleting password reset token:", error)
     return false
   }
 }
@@ -576,7 +678,7 @@ export async function storeImage(imageData: {
   try {
     const db = await getDb()
     const now = new Date()
-    const id = crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 15)
+    const id = crypto.randomUUID()
 
     const newImage = {
       id,
@@ -626,7 +728,7 @@ export async function createPrizeAccount(
   try {
     const db = await getDb()
     const now = new Date()
-    const id = crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 15)
+    const id = crypto.randomUUID()
 
     const newAccount = {
       ...accountData,

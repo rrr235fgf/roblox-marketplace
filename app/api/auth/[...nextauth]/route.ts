@@ -1,10 +1,8 @@
 import NextAuth, { type NextAuthOptions } from "next-auth"
-import GoogleProvider from "next-auth/providers/google"
 import CredentialsProvider from "next-auth/providers/credentials"
-import { getUserByEmail, createUser, updateUser } from "@/lib/db"
+import { getUserByEmail, createUser } from "@/lib/db"
 import bcrypt from "bcryptjs"
 
-// تعريف أنواع البيانات المتوقعة
 declare module "next-auth" {
   interface Session {
     user: {
@@ -12,7 +10,7 @@ declare module "next-auth" {
       name?: string | null
       email?: string | null
       image?: string | null
-      provider?: string
+      emailVerified?: boolean
     }
   }
 }
@@ -20,16 +18,12 @@ declare module "next-auth" {
 declare module "next-auth/jwt" {
   interface JWT {
     id?: string
-    provider?: string
+    emailVerified?: boolean
   }
 }
 
 export const authOptions: NextAuthOptions = {
   providers: [
-    GoogleProvider({
-      clientId: process.env.GOOGLE_CLIENT_ID || "",
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET || "",
-    }),
     CredentialsProvider({
       name: "credentials",
       credentials: {
@@ -37,6 +31,7 @@ export const authOptions: NextAuthOptions = {
         password: { label: "Password", type: "password" },
         name: { label: "Name", type: "text", optional: true },
         isSignUp: { label: "Is Sign Up", type: "text", optional: true },
+        verificationToken: { label: "Verification Token", type: "text", optional: true },
       },
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) {
@@ -67,7 +62,6 @@ export const authOptions: NextAuthOptions = {
               username: credentials.name,
               email: credentials.email,
               avatar: "/placeholder.svg",
-              provider: "credentials",
               password: hashedPassword,
               badges: ["عضو جديد"],
               joinDate: new Date().toISOString(),
@@ -82,6 +76,7 @@ export const authOptions: NextAuthOptions = {
               name: newUser.username,
               email: newUser.email,
               image: newUser.avatar,
+              emailVerified: false,
             }
           } else {
             // تسجيل الدخول
@@ -91,7 +86,7 @@ export const authOptions: NextAuthOptions = {
             }
 
             if (!user.password) {
-              throw new Error("هذا الحساب مسجل عبر Google، يرجى استخدام تسجيل الدخول عبر Google")
+              throw new Error("حساب غير صحيح")
             }
 
             const isPasswordValid = await bcrypt.compare(credentials.password, user.password)
@@ -104,71 +99,30 @@ export const authOptions: NextAuthOptions = {
               name: user.username,
               email: user.email,
               image: user.avatar,
+              emailVerified: user.emailVerified || false,
             }
           }
         } catch (error) {
           console.error("Auth error:", error)
-          return null
+          throw error
         }
       },
     }),
   ],
   callbacks: {
-    async jwt({ token, account, profile, user }) {
-      if (account && user) {
+    async jwt({ token, user }) {
+      if (user) {
         token.id = user.id
-        token.provider = account.provider
+        token.emailVerified = (user as any).emailVerified
       }
       return token
     },
     async session({ session, token }) {
       if (session.user) {
         session.user.id = (token.id as string) || ""
-        session.user.provider = (token.provider as string) || ""
+        session.user.emailVerified = (token.emailVerified as boolean) || false
       }
       return session
-    },
-    async signIn({ user, account, profile }) {
-      try {
-        if (account?.provider === "google") {
-          if (!user.email) return false
-
-          const existingUser = await getUserByEmail(user.email)
-
-          // تحديد ما إذا كان المستخدم مسؤولاً (يمكنك تغيير هذا البريد الإلكتروني)
-          const isAdmin = user.email === "admin@example.com"
-          const badges = isAdmin ? ["عضو جديد", "ادارة"] : ["عضو جديد"]
-
-          if (!existingUser) {
-            const newUser = await createUser({
-              id: crypto.randomUUID(),
-              username: user.name || "مستخدم جديد",
-              email: user.email,
-              avatar: user.image || "/placeholder.svg",
-              provider: "google",
-              badges: badges,
-              joinDate: new Date().toISOString(),
-              totalSales: 0,
-              listedAssets: 0,
-              averageRating: 0,
-              emailVerified: true,
-            })
-            user.id = newUser.id
-          } else {
-            // تحديث معلومات المستخدم إذا لزم الأمر
-            if (isAdmin && !existingUser.badges.includes("ادارة")) {
-              const updatedBadges = [...existingUser.badges, "ادارة"]
-              await updateUser(existingUser.id, { badges: updatedBadges })
-            }
-            user.id = existingUser.id
-          }
-        }
-
-        return true
-      } catch (error) {
-        console.error("Error during sign in:", error)
-        return false
-      }
     },
   },
   pages: {

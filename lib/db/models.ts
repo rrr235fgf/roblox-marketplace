@@ -6,8 +6,7 @@ export interface User {
   username: string
   email?: string
   avatar: string
-  provider?: string // "google", "credentials", "discord" (للتوافق مع النظام القديم)
-  password?: string // للمستخدمين المسجلين يدوياً
+  password?: string
   discordId?: string // للتوافق مع النظام القديم
   badges: string[]
   joinDate: string
@@ -118,4 +117,26 @@ export interface LuckyWheelSpin {
   nextSpinTime: Date
   createdAt: Date
   updatedAt: Date
+}
+
+// نموذج رموز التحقق من البريد الإلكتروني
+export interface EmailVerificationToken {
+  _id?: ObjectId
+  id: string
+  userId: string
+  email: string
+  token: string
+  expiresAt: Date
+  createdAt: Date
+}
+
+// نموذج رموز إعادة تعيين كلمة المرور
+export interface PasswordResetToken {
+  _id?: ObjectId
+  id: string
+  userId: string
+  email: string
+  token: string
+  expiresAt: Date
+  createdAt: Date
 }

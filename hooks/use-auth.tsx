@@ -8,7 +8,7 @@ interface User {
   name?: string | null
   email?: string | null
   image?: string | null
-  provider?: string
+  emailVerified?: boolean
 }
 
 interface AuthContextType {
@@ -29,7 +29,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         name: session.user.name || null,
         email: session.user.email || null,
         image: session.user.image || null,
-        provider: (session.user.provider as string) || "",
+        emailVerified: (session.user.emailVerified as boolean) || false,
       }
     : null
 
