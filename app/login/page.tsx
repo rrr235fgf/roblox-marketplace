@@ -1,130 +1,94 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { useRouter, useSearchParams } from "next/navigation"
+import { useState } from "react"
 import { signIn, getSession } from "next-auth/react"
+import { useRouter } from "next/navigation"
+import { zodResolver } from "@hookform/resolvers/zod"
+import { useForm } from "react-hook-form"
+import { z } from "zod"
 import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { LoadingSpinner } from "@/components/loading-spinner"
 import { Navbar } from "@/components/navbar"
-import { TermsDialog } from "@/components/terms-dialog"
-import { useToast } from "@/hooks/use-toast"
-import { Eye, EyeOff, Mail, Lock, User } from "lucide-react"
+import { LoadingSpinner } from "@/components/loading-spinner"
+import { toast } from "@/hooks/use-toast"
+import { DiscordIcon } from "@/components/discord-icon"
 
-export default function Login() {
-  const [isLoading, setIsLoading] = useState(false)
-  const [showPassword, setShowPassword] = useState(false)
-  const [showTerms, setShowTerms] = useState(false)
-  const [formData, setFormData] = useState({
-    email: "",
-    password: "",
-    name: "",
-    confirmPassword: "",
+const loginSchema = z.object({
+  email: z.string().email({ message: "البريد الإلكتروني غير صحيح" }),
+  password: z.string().min(6, { message: "كلمة المرور يجب أن تكون 6 أحرف على الأقل" }),
+})
+
+const registerSchema = z
+  .object({
+    name: z.string().min(2, { message: "الاسم يجب أن يكون حرفين على الأقل" }),
+    email: z.string().email({ message: "البريد الإلكتروني غير صحيح" }),
+    password: z.string().min(6, { message: "كلمة المرور يجب أن تكون 6 أحرف على الأقل" }),
+    confirmPassword: z.string(),
   })
-  const [errors, setErrors] = useState<Record<string, string>>({})
+  .refine((data) => data.password === data.confirmPassword, {
+    message: "كلمات المرور غير متطابقة",
+    path: ["confirmPassword"],
+  })
 
+export default function LoginPage() {
   const router = useRouter()
-  const searchParams = useSearchParams()
-  const { toast } = useToast()
-  const error = searchParams.get("error")
+  const [isLoading, setIsLoading] = useState(false)
+  const [activeTab, setActiveTab] = useState("login")
 
-  useEffect(() => {
-    const checkSession = async () => {
-      const session = await getSession()
-      if (session) {
-        router.push("/dashboard")
-      }
-    }
-    checkSession()
-  }, [router])
+  const loginForm = useForm<z.infer<typeof loginSchema>>({
+    resolver: zodResolver(loginSchema),
+    defaultValues: {
+      email: "",
+      password: "",
+    },
+  })
 
-  useEffect(() => {
-    if (error) {
-      toast({
-        title: "خطأ في تسجيل الدخول",
-        description: getErrorMessage(error),
-        variant: "destructive",
-      })
-    }
-  }, [error, toast])
+  const registerForm = useForm<z.infer<typeof registerSchema>>({
+    resolver: zodResolver(registerSchema),
+    defaultValues: {
+      name: "",
+      email: "",
+      password: "",
+      confirmPassword: "",
+    },
+  })
 
-  const getErrorMessage = (error: string) => {
-    switch (error) {
-      case "CredentialsSignin":
-        return "البريد الإلكتروني أو كلمة المرور غير صحيحة"
-      default:
-        return "حدث خطأ أثناء تسجيل الدخول"
-    }
-  }
-
-  const validateForm = (isSignUp: boolean) => {
-    const newErrors: Record<string, string> = {}
-
-    if (!formData.email) {
-      newErrors.email = "البريد الإلكتروني مطلوب"
-    } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
-      newErrors.email = "البريد الإلكتروني غير صحيح"
-    }
-
-    if (!formData.password) {
-      newErrors.password = "كلمة المرور مطلوبة"
-    } else if (isSignUp && formData.password.length < 6) {
-      newErrors.password = "كلمة المرور يجب أن تكون 6 أحرف على الأقل"
-    }
-
-    if (isSignUp) {
-      if (!formData.name) {
-        newErrors.name = "الاسم مطلوب"
-      }
-      if (formData.password !== formData.confirmPassword) {
-        newErrors.confirmPassword = "كلمات المرور غير متطابقة"
-      }
-    }
-
-    setErrors(newErrors)
-    return Object.keys(newErrors).length === 0
-  }
-
-  const handleCredentialsAuth = async (isSignUp: boolean) => {
-    if (!validateForm(isSignUp)) return
-
-    if (isSignUp) {
-      const hasAcceptedTerms = localStorage.getItem("termsAccepted")
-      if (!hasAcceptedTerms) {
-        setShowTerms(true)
-        return
-      }
-    }
-
-    setIsLoading(true)
+  const onLogin = async (values: z.infer<typeof loginSchema>) => {
     try {
+      setIsLoading(true)
+
       const result = await signIn("credentials", {
-        email: formData.email,
-        password: formData.password,
-        name: formData.name,
-        isSignUp: isSignUp.toString(),
+        email: values.email,
+        password: values.password,
+        action: "login",
         redirect: false,
       })
 
       if (result?.error) {
         toast({
-          title: "خطأ",
+          title: "خطأ في تسجيل الدخول",
           description: result.error,
           variant: "destructive",
         })
-      } else if (result?.ok) {
+        return
+      }
+
+      // التحقق من الجلسة
+      const session = await getSession()
+      if (session) {
         toast({
-          title: "نجح!",
-          description: isSignUp ? "تم إنشاء الحساب بنجاح" : "تم تسجيل الدخول بنجاح",
+          title: "تم تسجيل الدخول بنجاح",
+          description: `مرحباً ${session.user?.name || session.user?.email}`,
         })
         router.push("/dashboard")
       }
     } catch (error) {
+      console.error("Login error:", error)
       toast({
-        title: "خطأ",
+        title: "خطأ في تسجيل الدخول",
         description: "حدث خطأ غير متوقع",
         variant: "destructive",
       })
@@ -133,166 +97,215 @@ export default function Login() {
     }
   }
 
-  const handleAcceptTerms = () => {
-    localStorage.setItem("termsAccepted", "true")
-    setShowTerms(false)
-    handleCredentialsAuth(true)
+  const onRegister = async (values: z.infer<typeof registerSchema>) => {
+    try {
+      setIsLoading(true)
+
+      const result = await signIn("credentials", {
+        name: values.name,
+        email: values.email,
+        password: values.password,
+        action: "register",
+        redirect: false,
+      })
+
+      if (result?.error) {
+        toast({
+          title: "خطأ في إنشاء الحساب",
+          description: result.error,
+          variant: "destructive",
+        })
+        return
+      }
+
+      // التحقق من الجلسة
+      const session = await getSession()
+      if (session) {
+        toast({
+          title: "تم إنشاء الحساب بنجاح",
+          description: `مرحباً ${session.user?.name}`,
+        })
+        router.push("/dashboard")
+      }
+    } catch (error) {
+      console.error("Register error:", error)
+      toast({
+        title: "خطأ في إنشاء الحساب",
+        description: "حدث خطأ غير متوقع",
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleDiscordLogin = async () => {
+    try {
+      setIsLoading(true)
+      await signIn("discord", { callbackUrl: "/dashboard" })
+    } catch (error) {
+      console.error("Discord login error:", error)
+      toast({
+        title: "خطأ في تسجيل الدخول",
+        description: "حدث خطأ أثناء تسجيل الدخول بـ Discord",
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   return (
     <div className="flex min-h-screen flex-col">
       <Navbar />
-      <main className="flex flex-1 items-center justify-center p-4">
+      <div className="flex flex-1 items-center justify-center p-4">
         <Card className="w-full max-w-md">
           <CardHeader className="text-center">
             <CardTitle className="text-2xl">مرحباً بك</CardTitle>
-            <CardDescription>قم بتسجيل الدخول أو إنشاء حساب جديد للوصول إلى سوق المنتجات</CardDescription>
+            <CardDescription>سجل دخولك أو أنشئ حساباً جديداً للمتابعة</CardDescription>
           </CardHeader>
           <CardContent>
-            <Tabs defaultValue="signin" className="w-full">
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
               <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="signin">تسجيل الدخول</TabsTrigger>
-                <TabsTrigger value="signup">إنشاء حساب</TabsTrigger>
+                <TabsTrigger value="login">تسجيل الدخول</TabsTrigger>
+                <TabsTrigger value="register">إنشاء حساب</TabsTrigger>
               </TabsList>
 
-              <TabsContent value="signin" className="space-y-4">
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="signin-email">البريد الإلكتروني</Label>
-                    <div className="relative">
-                      <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                      <Input
-                        id="signin-email"
-                        type="email"
-                        placeholder="example@email.com"
-                        className="pl-10"
-                        value={formData.email}
-                        onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                      />
-                    </div>
-                    {errors.email && <p className="text-sm text-red-500">{errors.email}</p>}
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="signin-password">كلمة المرور</Label>
-                    <div className="relative">
-                      <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                      <Input
-                        id="signin-password"
-                        type={showPassword ? "text" : "password"}
-                        placeholder="••••••••"
-                        className="pl-10 pr-10"
-                        value={formData.password}
-                        onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                      />
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
-                        onClick={() => setShowPassword(!showPassword)}
-                      >
-                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                      </Button>
-                    </div>
-                    {errors.password && <p className="text-sm text-red-500">{errors.password}</p>}
-                  </div>
-
-                  <Button onClick={() => handleCredentialsAuth(false)} className="w-full" disabled={isLoading}>
-                    {isLoading ? <LoadingSpinner className="mr-2" /> : null}
-                    تسجيل الدخول
-                  </Button>
-                </div>
+              <TabsContent value="login" className="space-y-4">
+                <Form {...loginForm}>
+                  <form onSubmit={loginForm.handleSubmit(onLogin)} className="space-y-4">
+                    <FormField
+                      control={loginForm.control}
+                      name="email"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>البريد الإلكتروني</FormLabel>
+                          <FormControl>
+                            <Input type="email" placeholder="أدخل بريدك الإلكتروني" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={loginForm.control}
+                      name="password"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>كلمة المرور</FormLabel>
+                          <FormControl>
+                            <Input type="password" placeholder="أدخل كلمة المرور" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <Button type="submit" className="w-full" disabled={isLoading}>
+                      {isLoading ? (
+                        <>
+                          <LoadingSpinner className="mr-2" />
+                          جاري تسجيل الدخول...
+                        </>
+                      ) : (
+                        "تسجيل الدخول"
+                      )}
+                    </Button>
+                  </form>
+                </Form>
               </TabsContent>
 
-              <TabsContent value="signup" className="space-y-4">
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="signup-name">الاسم الكامل</Label>
-                    <div className="relative">
-                      <User className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                      <Input
-                        id="signup-name"
-                        type="text"
-                        placeholder="اسمك الكامل"
-                        className="pl-10"
-                        value={formData.name}
-                        onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                      />
-                    </div>
-                    {errors.name && <p className="text-sm text-red-500">{errors.name}</p>}
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="signup-email">البريد الإلكتروني</Label>
-                    <div className="relative">
-                      <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                      <Input
-                        id="signup-email"
-                        type="email"
-                        placeholder="example@email.com"
-                        className="pl-10"
-                        value={formData.email}
-                        onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                      />
-                    </div>
-                    {errors.email && <p className="text-sm text-red-500">{errors.email}</p>}
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="signup-password">كلمة المرور</Label>
-                    <div className="relative">
-                      <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                      <Input
-                        id="signup-password"
-                        type={showPassword ? "text" : "password"}
-                        placeholder="••••••••"
-                        className="pl-10 pr-10"
-                        value={formData.password}
-                        onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                      />
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
-                        onClick={() => setShowPassword(!showPassword)}
-                      />
-                    </div>
-                    {errors.password && <p className="text-sm text-red-500">{errors.password}</p>}
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="confirm-password">تأكيد كلمة المرور</Label>
-                    <div className="relative">
-                      <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                      <Input
-                        id="confirm-password"
-                        type={showPassword ? "text" : "password"}
-                        placeholder="••••••••"
-                        className="pl-10"
-                        value={formData.confirmPassword}
-                        onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
-                      />
-                    </div>
-                    {errors.confirmPassword && <p className="text-sm text-red-500">{errors.confirmPassword}</p>}
-                  </div>
-
-                  <Button onClick={() => handleCredentialsAuth(true)} className="w-full" disabled={isLoading}>
-                    {isLoading ? <LoadingSpinner className="mr-2" /> : null}
-                    إنشاء حساب
-                  </Button>
-                </div>
+              <TabsContent value="register" className="space-y-4">
+                <Form {...registerForm}>
+                  <form onSubmit={registerForm.handleSubmit(onRegister)} className="space-y-4">
+                    <FormField
+                      control={registerForm.control}
+                      name="name"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>الاسم</FormLabel>
+                          <FormControl>
+                            <Input placeholder="أدخل اسمك" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={registerForm.control}
+                      name="email"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>البريد الإلكتروني</FormLabel>
+                          <FormControl>
+                            <Input type="email" placeholder="أدخل بريدك الإلكتروني" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={registerForm.control}
+                      name="password"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>كلمة المرور</FormLabel>
+                          <FormControl>
+                            <Input type="password" placeholder="أدخل كلمة المرور" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={registerForm.control}
+                      name="confirmPassword"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>تأكيد كلمة المرور</FormLabel>
+                          <FormControl>
+                            <Input type="password" placeholder="أعد إدخال كلمة المرور" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <Button type="submit" className="w-full" disabled={isLoading}>
+                      {isLoading ? (
+                        <>
+                          <LoadingSpinner className="mr-2" />
+                          جاري إنشاء الحساب...
+                        </>
+                      ) : (
+                        "إنشاء حساب"
+                      )}
+                    </Button>
+                  </form>
+                </Form>
               </TabsContent>
             </Tabs>
-          </CardContent>
-          <CardFooter className="text-center text-sm text-muted-foreground">
-            بالتسجيل، أنت توافق على شروط الخدمة وسياسة الخصوصية الخاصة بنا
-          </CardFooter>
-        </Card>
-      </main>
 
-      <TermsDialog open={showTerms} onOpenChange={setShowTerms} onAccept={handleAcceptTerms} />
+            <div className="mt-6">
+              <div className="relative">
+                <div className="absolute inset-0 flex items-center">
+                  <span className="w-full border-t" />
+                </div>
+                <div className="relative flex justify-center text-xs uppercase">
+                  <span className="bg-background px-2 text-muted-foreground">أو</span>
+                </div>
+              </div>
+              <Button
+                variant="outline"
+                className="w-full mt-4 bg-transparent"
+                onClick={handleDiscordLogin}
+                disabled={isLoading}
+              >
+                <DiscordIcon className="mr-2 h-4 w-4" />
+                متابعة مع Discord
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   )
 }

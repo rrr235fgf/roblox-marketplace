@@ -1,100 +1,77 @@
-import NextAuth, { type NextAuthOptions } from "next-auth"
+import NextAuth from "next-auth"
 import CredentialsProvider from "next-auth/providers/credentials"
-import { getUserByEmail, createUser } from "@/lib/db"
+import DiscordProvider from "next-auth/providers/discord"
+import { MongoDBAdapter } from "@next-auth/mongodb-adapter"
+import { MongoClient } from "mongodb"
 import bcrypt from "bcryptjs"
+import { getUserByEmail, createUser } from "@/lib/db"
 
-declare module "next-auth" {
-  interface Session {
-    user: {
-      id: string
-      name?: string | null
-      email?: string | null
-      image?: string | null
-    }
-  }
-}
+const client = new MongoClient(process.env.MONGODB_URI!)
+const clientPromise = Promise.resolve(client)
 
-declare module "next-auth/jwt" {
-  interface JWT {
-    id?: string
-  }
-}
-
-export const authOptions: NextAuthOptions = {
+const handler = NextAuth({
+  adapter: MongoDBAdapter(clientPromise),
   providers: [
+    // Discord Provider (للمستخدمين القدامى)
+    DiscordProvider({
+      clientId: process.env.DISCORD_CLIENT_ID!,
+      clientSecret: process.env.DISCORD_CLIENT_SECRET!,
+    }),
+    // Credentials Provider (للتسجيل الجديد)
     CredentialsProvider({
       name: "credentials",
       credentials: {
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
-        name: { label: "Name", type: "text", optional: true },
-        isSignUp: { label: "Is Sign Up", type: "text", optional: true },
+        action: { label: "Action", type: "text" }, // "login" or "register"
+        name: { label: "Name", type: "text" },
       },
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) {
-          return null
+          throw new Error("البريد الإلكتروني وكلمة المرور مطلوبان")
         }
 
         try {
-          const isSignUp = credentials.isSignUp === "true"
-
-          if (isSignUp) {
-            // التسجيل
-            if (!credentials.name) {
-              throw new Error("الاسم مطلوب للتسجيل")
-            }
-
+          if (credentials.action === "register") {
             // التحقق من وجود المستخدم
             const existingUser = await getUserByEmail(credentials.email)
             if (existingUser) {
-              throw new Error("البريد الإلكتروني مستخدم بالفعل")
+              throw new Error("هذا البريد الإلكتروني مستخدم بالفعل")
             }
 
-            // تشفير كلمة المرور
+            // إنشاء مستخدم جديد
             const hashedPassword = await bcrypt.hash(credentials.password, 12)
-
-            // إنشاء المستخدم الجديد
             const newUser = await createUser({
-              id: crypto.randomUUID(),
-              username: credentials.name,
               email: credentials.email,
-              avatar: "/placeholder.svg",
               password: hashedPassword,
-              badges: ["عضو جديد"],
-              joinDate: new Date().toISOString(),
-              totalSales: 0,
-              listedAssets: 0,
-              averageRating: 0,
-              emailVerified: true, // تلقائياً مفعل
+              name: credentials.name || credentials.email.split("@")[0],
+              image: null,
+              emailVerified: new Date(), // تفعيل تلقائي
             })
 
             return {
               id: newUser.id,
-              name: newUser.username,
               email: newUser.email,
-              image: newUser.avatar,
+              name: newUser.name,
+              image: newUser.image,
             }
           } else {
-            // تسجيل الدخول
+            // تسجيل دخول
             const user = await getUserByEmail(credentials.email)
-            if (!user) {
-              throw new Error("البريد الإلكتروني أو كلمة المرور غير صحيحة")
-            }
-
-            if (!user.password) {
-              throw new Error("حساب غير صحيح")
+            if (!user || !user.password) {
+              throw new Error("بيانات الدخول غير صحيحة")
             }
 
             const isPasswordValid = await bcrypt.compare(credentials.password, user.password)
             if (!isPasswordValid) {
-              throw new Error("البريد الإلكتروني أو كلمة المرور غير صحيحة")
+              throw new Error("بيانات الدخول غير صحيحة")
             }
 
             return {
               id: user.id,
-              name: user.username,
               email: user.email,
-              image: user.avatar,
+              name: user.name,
+              image: user.image,
             }
           }
         } catch (error) {
@@ -104,6 +81,9 @@ export const authOptions: NextAuthOptions = {
       },
     }),
   ],
+  session: {
+    strategy: "jwt",
+  },
   callbacks: {
     async jwt({ token, user }) {
       if (user) {
@@ -112,23 +92,15 @@ export const authOptions: NextAuthOptions = {
       return token
     },
     async session({ session, token }) {
-      if (session.user) {
-        session.user.id = (token.id as string) || ""
+      if (token) {
+        session.user.id = token.id as string
       }
       return session
     },
   },
   pages: {
     signIn: "/login",
-    error: "/login",
   },
-  session: {
-    strategy: "jwt",
-    maxAge: 30 * 24 * 60 * 60, // 30 days
-  },
-  secret: process.env.NEXTAUTH_SECRET || "5a1abe4258124e0986619f28352937e7bd22247ede7e8f21b7fdd4d77777ffec",
-}
-
-const handler = NextAuth(authOptions)
+})
 
 export { handler as GET, handler as POST }

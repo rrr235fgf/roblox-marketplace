@@ -1,333 +1,204 @@
-import type { User, Asset, Sale, Review, PrizeAccount, LuckyWheelSpin } from "./models"
-import { getDb } from "./db"
-import crypto from "crypto"
+import { MongoClient, ObjectId } from "mongodb"
+import type { User, Asset, Review } from "./models"
 
-// اسم قاعدة البيانات
-const DB_NAME = "Marketplace"
+const uri = process.env.MONGODB_URI!
+const client = new MongoClient(uri)
 
-// تحديد شارات المستخدم بناءً على تاريخ التسجيل
-export function getUserBadges(joinDate: string, existingBadges: string[] = []): string[] {
-  const badges = [
-    ...existingBadges.filter(
-      (badge) => badge === "مميز" || badge === "مشهور" || badge === "ادارة" || badge === "موثوق",
-    ),
-  ]
+let isConnected = false
 
-  if (
-    !badges.includes("عضو جديد") &&
-    !badges.includes("عضو نشط") &&
-    !badges.includes("عضو متميز") &&
-    !badges.includes("عضو محترف")
-  ) {
-    badges.push("عضو جديد")
+async function connectToDatabase() {
+  if (!isConnected) {
+    await client.connect()
+    isConnected = true
   }
-
-  const registrationDate = new Date(joinDate)
-  const now = new Date()
-  const daysSinceRegistration = Math.floor((now.getTime() - registrationDate.getTime()) / (1000 * 60 * 60 * 24))
-
-  if (daysSinceRegistration >= 50) {
-    const index = badges.findIndex((badge) => badge === "عضو جديد" || badge === "عضو نشط" || badge === "عضو متميز")
-    if (index !== -1) {
-      badges.splice(index, 1)
-    }
-    if (!badges.includes("عضو محترف")) {
-      badges.push("عضو محترف")
-    }
-  } else if (daysSinceRegistration >= 25) {
-    const index = badges.findIndex((badge) => badge === "عضو جديد" || badge === "عضو نشط")
-    if (index !== -1) {
-      badges.splice(index, 1)
-    }
-    if (!badges.includes("عضو متميز") && !badges.includes("عضو محترف")) {
-      badges.push("عضو متميز")
-    }
-  } else if (daysSinceRegistration >= 5) {
-    const index = badges.findIndex((badge) => badge === "عضو جديد")
-    if (index !== -1) {
-      badges.splice(index, 1)
-    }
-    if (!badges.includes("عضو نشط") && !badges.includes("عضو متميز") && !badges.includes("عضو محترف")) {
-      badges.push("عضو نشط")
-    }
-  }
-
-  return badges
+  return client.db("roblox_marketplace")
 }
 
-// ==================== وظائف المستخدمين ====================
-
-// إنشاء مستخدم جديد
-export async function createUser(userData: Omit<User, "_id" | "createdAt" | "updatedAt">) {
+// User functions
+export async function getUserById(id: string): Promise<User | null> {
   try {
-    const db = await getDb()
-    const now = new Date()
+    const db = await connectToDatabase()
+    const user = await db.collection("users").findOne({ _id: new ObjectId(id) })
+    if (!user) return null
 
-    const newUser = {
-      ...userData,
-      badges: userData.badges || ["عضو جديد"],
-      createdAt: now,
-      updatedAt: now,
+    return {
+      id: user._id.toString(),
+      name: user.name,
+      email: user.email,
+      image: user.image,
+      password: user.password,
+      emailVerified: user.emailVerified,
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt,
     }
-
-    const result = await db.collection("users").insertOne(newUser)
-    return { ...newUser, _id: result.insertedId }
-  } catch (error) {
-    console.error("Error creating user:", error)
-    throw error
-  }
-}
-
-// الحصول على مستخدم بواسطة البريد الإلكتروني
-export async function getUserByEmail(email: string) {
-  try {
-    const db = await getDb()
-    const user = await db.collection("users").findOne({ email })
-
-    if (user) {
-      const updatedBadges = getUserBadges(user.joinDate, user.badges)
-      if (JSON.stringify(updatedBadges) !== JSON.stringify(user.badges)) {
-        await db.collection("users").updateOne({ email }, { $set: { badges: updatedBadges, updatedAt: new Date() } })
-        user.badges = updatedBadges
-      }
-    }
-
-    return user
-  } catch (error) {
-    console.error("Error getting user by email:", error)
-    return null
-  }
-}
-
-// الحصول على مستخدم بواسطة معرف Discord (للتوافق مع النظام القديم)
-export async function getUserByDiscordId(discordId: string) {
-  try {
-    const db = await getDb()
-    const user = await db.collection("users").findOne({ discordId })
-
-    if (user) {
-      const updatedBadges = getUserBadges(user.joinDate, user.badges)
-      if (JSON.stringify(updatedBadges) !== JSON.stringify(user.badges)) {
-        await db
-          .collection("users")
-          .updateOne({ discordId }, { $set: { badges: updatedBadges, updatedAt: new Date() } })
-        user.badges = updatedBadges
-      }
-    }
-
-    return user
-  } catch (error) {
-    console.error("Error getting user by Discord ID:", error)
-    return null
-  }
-}
-
-// الحصول على مستخدم بواسطة المعرف
-export async function getUserById(id: string) {
-  try {
-    const db = await getDb()
-    const user = await db.collection("users").findOne({ id })
-
-    if (user) {
-      const updatedBadges = getUserBadges(user.joinDate, user.badges)
-      if (JSON.stringify(updatedBadges) !== JSON.stringify(user.badges)) {
-        await db.collection("users").updateOne({ id }, { $set: { badges: updatedBadges, updatedAt: new Date() } })
-        user.badges = updatedBadges
-      }
-    }
-
-    return user
   } catch (error) {
     console.error("Error getting user by ID:", error)
     return null
   }
 }
 
-// تحديث مستخدم
-export async function updateUser(id: string, userData: Partial<User>) {
+export async function getUserByEmail(email: string): Promise<User | null> {
   try {
-    const db = await getDb()
-    const updateData = {
-      ...userData,
-      updatedAt: new Date(),
-    }
+    const db = await connectToDatabase()
+    const user = await db.collection("users").findOne({ email })
+    if (!user) return null
 
-    const result = await db.collection("users").updateOne({ id }, { $set: updateData })
-    return result.modifiedCount > 0
+    return {
+      id: user._id.toString(),
+      name: user.name,
+      email: user.email,
+      image: user.image,
+      password: user.password,
+      emailVerified: user.emailVerified,
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt,
+    }
   } catch (error) {
-    console.error("Error updating user:", error)
-    return false
+    console.error("Error getting user by email:", error)
+    return null
   }
 }
 
-// ==================== وظائف الأصول ====================
-
-export async function createAsset(assetData: Omit<Asset, "_id" | "createdAt" | "updatedAt" | "seller">) {
+export async function createUser(userData: Omit<User, "id" | "createdAt" | "updatedAt">): Promise<User> {
   try {
-    const db = await getDb()
+    const db = await connectToDatabase()
     const now = new Date()
 
-    if (!assetData.id || !assetData.title || !assetData.description || !assetData.sellerId) {
-      throw new Error("البيانات غير كاملة")
-    }
+    const result = await db.collection("users").insertOne({
+      ...userData,
+      createdAt: now,
+      updatedAt: now,
+    })
 
-    let validImages = Array.isArray(assetData.images)
-      ? assetData.images.filter((img) => typeof img === "string" && img.trim() !== "")
-      : []
-
-    if (validImages.length === 0) {
-      validImages = ["/placeholder.svg?height=800&width=600&text=Default+Product+Image"]
-    }
-
-    const newAsset = {
-      ...assetData,
-      images: validImages,
+    return {
+      id: result.insertedId.toString(),
+      ...userData,
       createdAt: now,
       updatedAt: now,
     }
-
-    const result = await db.collection("assets").insertOne(newAsset)
-
-    const seller = await db.collection("users").findOne({ id: assetData.sellerId })
-    if (seller) {
-      await db
-        .collection("users")
-        .updateOne(
-          { id: assetData.sellerId },
-          { $set: { listedAssets: (seller.listedAssets || 0) + 1, updatedAt: now } },
-        )
-    }
-
-    return { ...newAsset, _id: result.insertedId }
   } catch (error) {
-    console.error("Error creating asset:", error)
-    throw error
+    console.error("Error creating user:", error)
+    throw new Error("فشل في إنشاء المستخدم")
   }
 }
 
-export async function getAssets({
-  category,
-  sellerId,
-  searchQuery,
-  featured,
-  limit = 20,
-  skip = 0,
-}: {
+export async function updateUser(id: string, updates: Partial<User>): Promise<User | null> {
+  try {
+    const db = await connectToDatabase()
+    const result = await db.collection("users").findOneAndUpdate(
+      { _id: new ObjectId(id) },
+      {
+        $set: {
+          ...updates,
+          updatedAt: new Date(),
+        },
+      },
+      { returnDocument: "after" },
+    )
+
+    if (!result) return null
+
+    return {
+      id: result._id.toString(),
+      name: result.name,
+      email: result.email,
+      image: result.image,
+      password: result.password,
+      emailVerified: result.emailVerified,
+      createdAt: result.createdAt,
+      updatedAt: result.updatedAt,
+    }
+  } catch (error) {
+    console.error("Error updating user:", error)
+    return null
+  }
+}
+
+// Asset functions
+export async function getAssets(filters?: {
   category?: string
+  search?: string
   sellerId?: string
-  searchQuery?: string
   featured?: boolean
   limit?: number
   skip?: number
-} = {}) {
+}): Promise<Asset[]> {
   try {
-    const db = await getDb()
+    const db = await connectToDatabase()
+    const query: any = {}
 
-    const filter: any = {}
-
-    if (category) {
-      filter.category = category
+    if (filters?.category && filters.category !== "all") {
+      query.category = filters.category
     }
 
-    if (sellerId) {
-      filter.sellerId = sellerId
-    }
-
-    if (featured !== undefined) {
-      filter.featured = featured
-    }
-
-    if (searchQuery) {
-      filter.$or = [
-        { title: { $regex: searchQuery, $options: "i" } },
-        { description: { $regex: searchQuery, $options: "i" } },
+    if (filters?.search) {
+      query.$or = [
+        { title: { $regex: filters.search, $options: "i" } },
+        { description: { $regex: filters.search, $options: "i" } },
       ]
     }
 
-    const assets = await db.collection("assets").find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit).toArray()
+    if (filters?.sellerId) {
+      query.sellerId = filters.sellerId
+    }
 
-    const sellerIds = [...new Set(assets.map((asset) => asset.sellerId))]
-    const sellers = await db
-      .collection("users")
-      .find({ id: { $in: sellerIds } })
-      .toArray()
+    if (filters?.featured) {
+      query.featured = true
+    }
 
-    const assetsWithSellers = assets.map((asset) => {
-      const seller = sellers.find((s) => s.id === asset.sellerId)
+    let cursor = db.collection("assets").find(query).sort({ createdAt: -1 })
 
-      let validImages = Array.isArray(asset.images)
-        ? asset.images.filter((img) => typeof img === "string" && img.trim() !== "")
-        : []
+    if (filters?.skip) {
+      cursor = cursor.skip(filters.skip)
+    }
 
-      if (validImages.length === 0) {
-        validImages = ["/placeholder.svg?height=800&width=600&text=Default+Product+Image"]
-      }
+    if (filters?.limit) {
+      cursor = cursor.limit(filters.limit)
+    }
 
-      return {
-        ...asset,
-        images: validImages,
-        seller: seller
-          ? {
-              id: seller.id,
-              username: seller.username,
-              avatar: seller.avatar || "/placeholder.svg",
-              badges: seller.badges || [],
-              discordId: seller.discordId || "",
-            }
-          : {
-              id: "unknown",
-              username: "مستخدم غير معروف",
-              avatar: "/placeholder.svg",
-              badges: [],
-              discordId: "",
-            },
-      }
-    })
+    const assets = await cursor.toArray()
 
-    return assetsWithSellers
+    return assets.map((asset) => ({
+      id: asset._id.toString(),
+      title: asset.title,
+      description: asset.description,
+      price: asset.price,
+      category: asset.category,
+      paymentMethod: asset.paymentMethod,
+      images: asset.images,
+      sellerId: asset.sellerId,
+      featured: asset.featured || false,
+      rating: asset.rating || 0,
+      reviewCount: asset.reviewCount || 0,
+      createdAt: asset.createdAt,
+      updatedAt: asset.updatedAt,
+    }))
   } catch (error) {
     console.error("Error getting assets:", error)
     return []
   }
 }
 
-export async function getAssetById(id: string) {
+export async function getAssetById(id: string): Promise<Asset | null> {
   try {
-    const db = await getDb()
-    const asset = await db.collection("assets").findOne({ id })
-
-    if (!asset) {
-      return null
-    }
-
-    const seller = await db.collection("users").findOne({ id: asset.sellerId })
-
-    let validImages = Array.isArray(asset.images)
-      ? asset.images.filter((img) => typeof img === "string" && img.trim() !== "")
-      : []
-
-    if (validImages.length === 0) {
-      validImages = ["/placeholder.svg?height=800&width=600&text=Default+Product+Image"]
-    }
+    const db = await connectToDatabase()
+    const asset = await db.collection("assets").findOne({ _id: new ObjectId(id) })
+    if (!asset) return null
 
     return {
-      ...asset,
-      images: validImages,
-      seller: seller
-        ? {
-            id: seller.id,
-            username: seller.username,
-            avatar: seller.avatar || "/placeholder.svg",
-            badges: seller.badges || [],
-            discordId: seller.discordId || "",
-          }
-        : {
-            id: "unknown",
-            username: "مستخدم غير معروف",
-            avatar: "/placeholder.svg",
-            badges: [],
-            discordId: "",
-          },
+      id: asset._id.toString(),
+      title: asset.title,
+      description: asset.description,
+      price: asset.price,
+      category: asset.category,
+      paymentMethod: asset.paymentMethod,
+      images: asset.images,
+      sellerId: asset.sellerId,
+      featured: asset.featured || false,
+      rating: asset.rating || 0,
+      reviewCount: asset.reviewCount || 0,
+      createdAt: asset.createdAt,
+      updatedAt: asset.updatedAt,
     }
   } catch (error) {
     console.error("Error getting asset by ID:", error)
@@ -335,51 +206,78 @@ export async function getAssetById(id: string) {
   }
 }
 
-export async function updateAsset(id: string, assetData: Partial<Asset>) {
+export async function createAsset(
+  assetData: Omit<Asset, "id" | "createdAt" | "updatedAt" | "rating" | "reviewCount" | "featured">,
+): Promise<Asset> {
   try {
-    const db = await getDb()
+    const db = await connectToDatabase()
+    const now = new Date()
 
-    if (assetData.images) {
-      const validImages = Array.isArray(assetData.images)
-        ? assetData.images.filter((img) => typeof img === "string" && img.trim() !== "")
-        : []
-
-      if (validImages.length === 0) {
-        validImages.push("/placeholder.svg?height=800&width=600&text=Default+Product+Image")
-      }
-
-      assetData.images = validImages
-    }
-
-    const updateData = {
+    const result = await db.collection("assets").insertOne({
       ...assetData,
-      updatedAt: new Date(),
-    }
+      featured: false,
+      rating: 0,
+      reviewCount: 0,
+      createdAt: now,
+      updatedAt: now,
+    })
 
-    const result = await db.collection("assets").updateOne({ id }, { $set: updateData })
-    return result.modifiedCount > 0
+    return {
+      id: result.insertedId.toString(),
+      ...assetData,
+      featured: false,
+      rating: 0,
+      reviewCount: 0,
+      createdAt: now,
+      updatedAt: now,
+    }
   } catch (error) {
-    console.error("Error updating asset:", error)
-    return false
+    console.error("Error creating asset:", error)
+    throw new Error("فشل في إنشاء المنتج")
   }
 }
 
-export async function deleteAsset(id: string) {
+export async function updateAsset(id: string, updates: Partial<Asset>): Promise<Asset | null> {
   try {
-    const db = await getDb()
+    const db = await connectToDatabase()
+    const result = await db.collection("assets").findOneAndUpdate(
+      { _id: new ObjectId(id) },
+      {
+        $set: {
+          ...updates,
+          updatedAt: new Date(),
+        },
+      },
+      { returnDocument: "after" },
+    )
 
-    const asset = await db.collection("assets").findOne({ id })
+    if (!result) return null
 
-    if (asset) {
-      const seller = await db.collection("users").findOne({ id: asset.sellerId })
-      if (seller && seller.listedAssets > 0) {
-        await db
-          .collection("users")
-          .updateOne({ id: asset.sellerId }, { $set: { listedAssets: seller.listedAssets - 1, updatedAt: new Date() } })
-      }
+    return {
+      id: result._id.toString(),
+      title: result.title,
+      description: result.description,
+      price: result.price,
+      category: result.category,
+      paymentMethod: result.paymentMethod,
+      images: result.images,
+      sellerId: result.sellerId,
+      featured: result.featured || false,
+      rating: result.rating || 0,
+      reviewCount: result.reviewCount || 0,
+      createdAt: result.createdAt,
+      updatedAt: result.updatedAt,
     }
+  } catch (error) {
+    console.error("Error updating asset:", error)
+    return null
+  }
+}
 
-    const result = await db.collection("assets").deleteOne({ id })
+export async function deleteAsset(id: string): Promise<boolean> {
+  try {
+    const db = await connectToDatabase()
+    const result = await db.collection("assets").deleteOne({ _id: new ObjectId(id) })
     return result.deletedCount > 0
   } catch (error) {
     console.error("Error deleting asset:", error)
@@ -387,341 +285,72 @@ export async function deleteAsset(id: string) {
   }
 }
 
-// ==================== وظائف المبيعات ====================
-
-export async function createSale(saleData: Omit<Sale, "_id" | "createdAt" | "updatedAt" | "asset" | "buyer">) {
+// Review functions
+export async function getReviewsByAssetId(assetId: string): Promise<Review[]> {
   try {
-    const db = await getDb()
-    const now = new Date()
+    const db = await connectToDatabase()
+    const reviews = await db.collection("reviews").find({ assetId }).sort({ createdAt: -1 }).toArray()
 
-    const newSale = {
-      ...saleData,
-      date: new Date(saleData.date),
-      createdAt: now,
-      updatedAt: now,
-    }
-
-    const result = await db.collection("sales").insertOne(newSale)
-
-    const seller = await db.collection("users").findOne({ id: saleData.sellerId })
-    if (seller) {
-      await db
-        .collection("users")
-        .updateOne({ id: saleData.sellerId }, { $set: { totalSales: (seller.totalSales || 0) + 1, updatedAt: now } })
-    }
-
-    return { ...newSale, _id: result.insertedId }
+    return reviews.map((review) => ({
+      id: review._id.toString(),
+      assetId: review.assetId,
+      userId: review.userId,
+      userName: review.userName,
+      rating: review.rating,
+      comment: review.comment,
+      createdAt: review.createdAt,
+    }))
   } catch (error) {
-    console.error("Error creating sale:", error)
-    throw error
-  }
-}
-
-export async function getRecentSales(limit = 5) {
-  try {
-    const db = await getDb()
-
-    const sales = await db.collection("sales").find().sort({ date: -1 }).limit(limit).toArray()
-
-    const assetIds = [...new Set(sales.map((sale) => sale.assetId))]
-    const buyerIds = [...new Set(sales.map((sale) => sale.buyerId))]
-
-    const assets = await db
-      .collection("assets")
-      .find({ id: { $in: assetIds } })
-      .toArray()
-
-    const buyers = await db
-      .collection("users")
-      .find({ id: { $in: buyerIds } })
-      .toArray()
-
-    const salesWithDetails = sales.map((sale) => {
-      const asset = assets.find((a) => a.id === sale.assetId)
-      const buyer = buyers.find((b) => b.id === sale.buyerId)
-
-      return {
-        ...sale,
-        asset: asset
-          ? {
-              id: asset.id,
-              title: asset.title,
-              category: asset.category,
-              image: Array.isArray(asset.images) && asset.images.length > 0 ? asset.images[0] : "/placeholder.svg",
-            }
-          : {
-              id: "unknown",
-              title: "منتج غير معروف",
-              category: "other",
-              image: "/placeholder.svg",
-            },
-        buyer: buyer
-          ? {
-              id: buyer.id,
-              username: buyer.username,
-              avatar: buyer.avatar || "/placeholder.svg",
-            }
-          : {
-              id: "unknown",
-              username: "مستخدم غير معروف",
-              avatar: "/placeholder.svg",
-            },
-      }
-    })
-
-    return salesWithDetails
-  } catch (error) {
-    console.error("Error getting recent sales:", error)
+    console.error("Error getting reviews:", error)
     return []
   }
 }
 
-// ==================== وظائف التقييمات ====================
-
-export async function createReview(reviewData: Omit<Review, "_id" | "createdAt" | "updatedAt" | "user">) {
+export async function createReview(reviewData: Omit<Review, "id" | "createdAt">): Promise<Review> {
   try {
-    const db = await getDb()
+    const db = await connectToDatabase()
     const now = new Date()
 
-    const newReview = {
+    const result = await db.collection("reviews").insertOne({
       ...reviewData,
       createdAt: now,
-      updatedAt: now,
-    }
-
-    const result = await db.collection("reviews").insertOne(newReview)
-
-    const asset = await db.collection("assets").findOne({ id: reviewData.assetId })
-    if (asset) {
-      const totalRating = asset.rating * asset.ratingCount + reviewData.rating
-      const newRatingCount = asset.ratingCount + 1
-      const newRating = totalRating / newRatingCount
-
-      await db
-        .collection("assets")
-        .updateOne(
-          { id: reviewData.assetId },
-          { $set: { rating: newRating, ratingCount: newRatingCount, updatedAt: now } },
-        )
-    }
-
-    return { ...newReview, _id: result.insertedId }
-  } catch (error) {
-    console.error("Error creating review:", error)
-    throw error
-  }
-}
-
-export async function getAssetReviews(assetId: string) {
-  try {
-    const db = await getDb()
-
-    const reviews = await db.collection("reviews").find({ assetId }).toArray()
-
-    const userIds = [...new Set(reviews.map((review) => review.userId))]
-    const users = await db
-      .collection("users")
-      .find({ id: { $in: userIds } })
-      .toArray()
-
-    const reviewsWithDetails = reviews.map((review) => {
-      const user = users.find((u) => u.id === review.userId)
-
-      return {
-        ...review,
-        user: user
-          ? {
-              id: user.id,
-              username: user.username,
-              avatar: user.avatar || "/placeholder.svg",
-            }
-          : {
-              id: "unknown",
-              username: "مستخدم غير معروف",
-              avatar: "/placeholder.svg",
-            },
-      }
     })
 
-    return reviewsWithDetails
-  } catch (error) {
-    console.error("Error getting asset reviews:", error)
-    return []
-  }
-}
+    // Update asset rating
+    await updateAssetRating(reviewData.assetId)
 
-// ==================== وظائف الصور ====================
-
-export async function storeImage(imageData: {
-  filename: string
-  contentType: string
-  data: string
-  uploadedBy: string
-}) {
-  try {
-    const db = await getDb()
-    const now = new Date()
-    const id = crypto.randomUUID()
-
-    const newImage = {
-      id,
-      filename: imageData.filename,
-      contentType: imageData.contentType,
-      data: imageData.data,
-      uploadedBy: imageData.uploadedBy,
+    return {
+      id: result.insertedId.toString(),
+      ...reviewData,
       createdAt: now,
-      updatedAt: now,
     }
-
-    const result = await db.collection("images").insertOne(newImage)
-    return { ...newImage, _id: result.insertedId }
   } catch (error) {
-    console.error("Error storing image:", error)
-    throw error
+    console.error("Error creating review:", error)
+    throw new Error("فشل في إضافة التقييم")
   }
 }
 
-export async function getImageById(id: string) {
+async function updateAssetRating(assetId: string) {
   try {
-    const db = await getDb()
-    const image = await db.collection("images").findOne({ id })
-    return image
+    const db = await connectToDatabase()
+    const reviews = await db.collection("reviews").find({ assetId }).toArray()
+
+    if (reviews.length === 0) return
+
+    const totalRating = reviews.reduce((sum, review) => sum + review.rating, 0)
+    const averageRating = totalRating / reviews.length
+
+    await db.collection("assets").updateOne(
+      { _id: new ObjectId(assetId) },
+      {
+        $set: {
+          rating: Math.round(averageRating * 10) / 10,
+          reviewCount: reviews.length,
+          updatedAt: new Date(),
+        },
+      },
+    )
   } catch (error) {
-    console.error("Error getting image by ID:", error)
-    return null
-  }
-}
-
-export async function deleteImage(id: string) {
-  try {
-    const db = await getDb()
-    const result = await db.collection("images").deleteOne({ id })
-    return result.deletedCount > 0
-  } catch (error) {
-    console.error("Error deleting image:", error)
-    return false
-  }
-}
-
-// ==================== وظائف حسابات الجوائز ====================
-
-export async function createPrizeAccount(
-  accountData: Omit<PrizeAccount, "_id" | "createdAt" | "updatedAt" | "claimed" | "claimedBy" | "claimedAt">,
-) {
-  try {
-    const db = await getDb()
-    const now = new Date()
-    const id = crypto.randomUUID()
-
-    const newAccount = {
-      ...accountData,
-      id,
-      claimed: false,
-      createdAt: now,
-      updatedAt: now,
-    }
-
-    const result = await db.collection("prizeAccounts").insertOne(newAccount)
-    return { ...newAccount, _id: result.insertedId }
-  } catch (error) {
-    console.error("Error creating prize account:", error)
-    throw error
-  }
-}
-
-export async function getUnclaimedPrizeAccountByType(type: "empty" | "bloxfruit" | "medium" | "premium") {
-  try {
-    const db = await getDb()
-    const account = await db.collection("prizeAccounts").findOne({ type, claimed: false })
-    return account
-  } catch (error) {
-    console.error("Error getting unclaimed prize account:", error)
-    return null
-  }
-}
-
-export async function claimPrizeAccount(accountId: string, userId: string) {
-  try {
-    const db = await getDb()
-    const now = new Date()
-
-    const result = await db
-      .collection("prizeAccounts")
-      .updateOne(
-        { id: accountId, claimed: false },
-        { $set: { claimed: true, claimedBy: userId, claimedAt: now, updatedAt: now } },
-      )
-
-    return result.modifiedCount > 0
-  } catch (error) {
-    console.error("Error claiming prize account:", error)
-    return false
-  }
-}
-
-export async function getUserClaimedPrizeAccounts(userId: string) {
-  try {
-    const db = await getDb()
-    const accounts = await db.collection("prizeAccounts").find({ claimedBy: userId }).toArray()
-    return accounts
-  } catch (error) {
-    console.error("Error getting user claimed prize accounts:", error)
-    return []
-  }
-}
-
-export async function getAllPrizeAccounts() {
-  try {
-    const db = await getDb()
-    const accounts = await db.collection("prizeAccounts").find().sort({ createdAt: -1 }).toArray()
-    return accounts
-  } catch (error) {
-    console.error("Error getting all prize accounts:", error)
-    return []
-  }
-}
-
-// ==================== وظائف سجل عجلة الحظ ====================
-
-export async function recordLuckyWheelSpin(spinData: Omit<LuckyWheelSpin, "_id" | "createdAt" | "updatedAt">) {
-  try {
-    const db = await getDb()
-    const now = new Date()
-
-    const newSpin = {
-      ...spinData,
-      createdAt: now,
-      updatedAt: now,
-    }
-
-    const result = await db.collection("luckyWheelSpins").insertOne(newSpin)
-    return { ...newSpin, _id: result.insertedId }
-  } catch (error) {
-    console.error("Error recording lucky wheel spin:", error)
-    throw error
-  }
-}
-
-export async function getLastUserLuckyWheelSpin(userId: string) {
-  try {
-    const db = await getDb()
-    const spin = await db.collection("luckyWheelSpins").findOne({ userId }, { sort: { spinTime: -1 } })
-    return spin
-  } catch (error) {
-    console.error("Error getting last user lucky wheel spin:", error)
-    return null
-  }
-}
-
-export async function canUserSpin(userId: string) {
-  try {
-    const lastSpin = await getLastUserLuckyWheelSpin(userId)
-    if (!lastSpin) return true
-
-    const now = new Date()
-    return now >= new Date(lastSpin.nextSpinTime)
-  } catch (error) {
-    console.error("Error checking if user can spin:", error)
-    return false
+    console.error("Error updating asset rating:", error)
   }
 }
