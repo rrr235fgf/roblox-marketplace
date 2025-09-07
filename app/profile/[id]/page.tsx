@@ -189,16 +189,17 @@ export default function ProfilePage() {
       <main className="container py-8">
         <div className="flex flex-col items-center gap-6 md:flex-row md:items-start">
           <div className="relative h-32 w-32 overflow-hidden rounded-full border">
-            <Image
-              src={seller.avatar || "/placeholder.svg?height=128&width=128"}
-              alt={seller.username}
-              fill
-              className="object-cover"
-              onError={(e) => {
-                const target = e.target as HTMLImageElement
-                target.src = "/placeholder.svg?height=128&width=128"
-              }}
-            />
+<Image
+  src={seller.avatar || "/placeholder.svg?height=128&width=128"}
+  alt={seller.username}
+  fill
+  className="object-cover"
+  unoptimized={seller.avatar?.startsWith("data:image/")}
+  onError={(e) => {
+    const target = e.target as HTMLImageElement
+    target.src = "/placeholder.svg?height=128&width=128"
+  }}
+/>
             {!seller.avatar && (
               <div className="absolute inset-0 flex items-center justify-center bg-muted">
                 <User className="h-16 w-16 text-muted-foreground" />
