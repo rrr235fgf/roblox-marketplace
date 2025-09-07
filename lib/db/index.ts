@@ -306,6 +306,10 @@ export async function getReviewsByAssetId(assetId: string): Promise<Review[]> {
   }
 }
 
+export async function getAssetReviews(assetId: string): Promise<Review[]> {
+  return getReviewsByAssetId(assetId)
+}
+
 export async function createReview(reviewData: Omit<Review, "id" | "createdAt">): Promise<Review> {
   try {
     const db = await connectToDatabase()
@@ -352,5 +356,113 @@ async function updateAssetRating(assetId: string) {
     )
   } catch (error) {
     console.error("Error updating asset rating:", error)
+  }
+}
+
+// Image functions
+export async function storeImage(imageData: {
+  filename: string
+  contentType: string
+  data: string
+  uploadedBy: string
+}): Promise<{ id: string }> {
+  try {
+    const db = await connectToDatabase()
+    const now = new Date()
+
+    const result = await db.collection("images").insertOne({
+      ...imageData,
+      createdAt: now,
+    })
+
+    return {
+      id: result.insertedId.toString(),
+    }
+  } catch (error) {
+    console.error("Error storing image:", error)
+    throw new Error("فشل في تخزين الصورة")
+  }
+}
+
+export async function getImageById(id: string): Promise<{
+  id: string
+  filename: string
+  contentType: string
+  data: string
+  uploadedBy: string
+  createdAt: Date
+} | null> {
+  try {
+    const db = await connectToDatabase()
+    const image = await db.collection("images").findOne({ _id: new ObjectId(id) })
+    if (!image) return null
+
+    return {
+      id: image._id.toString(),
+      filename: image.filename,
+      contentType: image.contentType,
+      data: image.data,
+      uploadedBy: image.uploadedBy,
+      createdAt: image.createdAt,
+    }
+  } catch (error) {
+    console.error("Error getting image by ID:", error)
+    return null
+  }
+}
+
+export async function deleteImage(id: string): Promise<boolean> {
+  try {
+    const db = await connectToDatabase()
+    const result = await db.collection("images").deleteOne({ _id: new ObjectId(id) })
+    return result.deletedCount > 0
+  } catch (error) {
+    console.error("Error deleting image:", error)
+    return false
+  }
+}
+
+// Email verification functions
+export async function createEmailVerificationToken(userId: string, email: string): Promise<string> {
+  try {
+    const db = await connectToDatabase()
+    const token = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15)
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 hours
+
+    await db.collection("email_verification_tokens").insertOne({
+      token,
+      userId,
+      email,
+      expiresAt,
+      createdAt: new Date(),
+    })
+
+    return token
+  } catch (error) {
+    console.error("Error creating email verification token:", error)
+    throw new Error("فشل في إنشاء رمز التحقق")
+  }
+}
+
+export async function verifyEmailToken(token: string): Promise<{ userId: string; email: string } | null> {
+  try {
+    const db = await connectToDatabase()
+    const verification = await db.collection("email_verification_tokens").findOne({
+      token,
+      expiresAt: { $gt: new Date() },
+    })
+
+    if (!verification) return null
+
+    // Delete the token after verification
+    await db.collection("email_verification_tokens").deleteOne({ _id: verification._id })
+
+    return {
+      userId: verification.userId,
+      email: verification.email,
+    }
+  } catch (error) {
+    console.error("Error verifying email token:", error)
+    return null
   }
 }
