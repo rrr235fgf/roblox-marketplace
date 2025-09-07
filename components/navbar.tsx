@@ -4,7 +4,8 @@ import { useState, useEffect } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
+import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -14,150 +15,297 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { SearchDialog } from "@/components/search-dialog"
 import { ModeToggle } from "@/components/mode-toggle"
-import { Logo } from "@/components/logo"
 import { useAuth } from "@/hooks/use-auth"
-import { Search, User, LogOut, Settings, Home, Package, Calculator, MessageCircle } from "lucide-react"
+import {
+  Menu,
+  Search,
+  User,
+  Settings,
+  LogOut,
+  Plus,
+  Home,
+  ShoppingBag,
+  Calculator,
+  MessageCircle,
+  Store,
+} from "lucide-react"
+import { Badge } from "@/components/ui/badge"
+
+const navigation = [
+  { name: "الرئيسية", href: "/", icon: Home },
+  { name: "المنتجات", href: "/assets", icon: ShoppingBag },
+]
+
+const tools = [{ name: "حسابات الضرائب", href: "/calculators", icon: Calculator }]
 
 export function Navbar() {
   const { user, signOut } = useAuth()
   const pathname = usePathname()
-  const [searchOpen, setSearchOpen] = useState(false)
-  const [unreadCount, setUnreadCount] = useState(0)
+  const [isSearchOpen, setIsSearchOpen] = useState(false)
+  const [unreadMessages, setUnreadMessages] = useState(0)
 
   // جلب عدد الرسائل غير المقروءة
   useEffect(() => {
     if (user) {
-      const fetchUnreadCount = async () => {
+      const fetchUnreadMessages = async () => {
         try {
           const response = await fetch("/api/messages/unread-count")
           if (response.ok) {
-            const data = await response.json()
-            setUnreadCount(data.count)
+            const { count } = await response.json()
+            setUnreadMessages(count)
           }
         } catch (error) {
-          console.error("Error fetching unread count:", error)
+          console.error("Error fetching unread messages:", error)
         }
       }
 
-      fetchUnreadCount()
-
-      // تحديث العدد كل 30 ثانية
-      const interval = setInterval(fetchUnreadCount, 30000)
+      fetchUnreadMessages()
+      // تحديث كل 30 ثانية
+      const interval = setInterval(fetchUnreadMessages, 30000)
       return () => clearInterval(interval)
     }
   }, [user])
 
-  const isActive = (path: string) => pathname === path
-
   return (
-    <nav className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+    <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container flex h-16 items-center justify-between">
-        <div className="flex items-center gap-6">
-          <Link href="/" className="flex items-center space-x-2">
-            <Logo />
+        <div className="flex items-center space-x-4 rtl:space-x-reverse">
+          {/* Logo والنص */}
+          <Link href="/" className="flex items-center space-x-2 rtl:space-x-reverse">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
+              <Store className="h-5 w-5 text-primary-foreground" />
+            </div>
+            <span className="text-lg font-bold">متجر روبلوكس</span>
           </Link>
 
-          <div className="hidden md:flex items-center space-x-6">
-            <Link href="/">
-              <Button variant={isActive("/") ? "default" : "ghost"} size="sm" className="flex items-center gap-2">
-                <Home className="h-4 w-4" />
-                الرئيسية
-              </Button>
-            </Link>
+          {/* Desktop Navigation */}
+          <nav className="hidden md:flex items-center space-x-6 rtl:space-x-reverse">
+            {navigation.map((item) => {
+              const Icon = item.icon
+              return (
+                <Link
+                  key={item.name}
+                  href={item.href}
+                  className={`flex items-center space-x-2 rtl:space-x-reverse text-sm font-medium transition-colors hover:text-primary ${
+                    pathname === item.href ? "text-foreground" : "text-muted-foreground"
+                  }`}
+                >
+                  <Icon className="h-4 w-4" />
+                  <span>{item.name}</span>
+                </Link>
+              )
+            })}
 
-            <Link href="/assets">
-              <Button variant={isActive("/assets") ? "default" : "ghost"} size="sm" className="flex items-center gap-2">
-                <Package className="h-4 w-4" />
-                المنتجات
-              </Button>
-            </Link>
-
+            {/* Tools Dropdown */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button
-                  variant={isActive("/calculators") ? "default" : "ghost"}
-                  size="sm"
-                  className="flex items-center gap-2"
-                >
+                <Button variant="ghost" className="flex items-center space-x-2 rtl:space-x-reverse">
                   <Calculator className="h-4 w-4" />
-                  الأدوات
+                  <span>الأدوات</span>
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="start">
-                <DropdownMenuItem asChild>
-                  <Link href="/calculators">حسابات الضرائب</Link>
-                </DropdownMenuItem>
+              <DropdownMenuContent align="end" className="w-48">
+                {tools.map((tool) => {
+                  const Icon = tool.icon
+                  return (
+                    <DropdownMenuItem key={tool.name} asChild>
+                      <Link href={tool.href} className="flex items-center space-x-2 rtl:space-x-reverse">
+                        <Icon className="h-4 w-4" />
+                        <span>{tool.name}</span>
+                      </Link>
+                    </DropdownMenuItem>
+                  )
+                })}
               </DropdownMenuContent>
             </DropdownMenu>
-          </div>
+
+            {/* Messages Link - Only show if user is logged in */}
+            {user && (
+              <Link
+                href="/messages"
+                className={`flex items-center space-x-2 rtl:space-x-reverse text-sm font-medium transition-colors hover:text-primary relative ${
+                  pathname === "/messages" ? "text-foreground" : "text-muted-foreground"
+                }`}
+              >
+                <MessageCircle className="h-4 w-4" />
+                <span>الرسائل</span>
+                {unreadMessages > 0 && (
+                  <Badge variant="destructive" className="absolute -top-2 -right-2 h-5 w-5 rounded-full p-0 text-xs">
+                    {unreadMessages > 99 ? "99+" : unreadMessages}
+                  </Badge>
+                )}
+              </Link>
+            )}
+          </nav>
         </div>
 
-        <div className="flex items-center gap-4">
-          <Button variant="ghost" size="sm" onClick={() => setSearchOpen(true)} className="hidden md:flex">
-            <Search className="h-4 w-4 mr-2" />
+        <div className="flex items-center space-x-4 rtl:space-x-reverse">
+          <Button variant="ghost" size="sm" onClick={() => setIsSearchOpen(true)} className="hidden sm:flex">
+            <Search className="h-4 w-4 ml-2" />
             بحث...
-          </Button>
-
-          <Button variant="ghost" size="sm" onClick={() => setSearchOpen(true)} className="md:hidden">
-            <Search className="h-4 w-4" />
           </Button>
 
           <ModeToggle />
 
           {user ? (
-            <div className="flex items-center gap-2">
-              {/* زر الرسائل */}
-              <Link href="/messages">
-                <Button variant={isActive("/messages") ? "default" : "ghost"} size="sm" className="relative">
-                  <MessageCircle className="h-4 w-4" />
-                  {unreadCount > 0 && (
-                    <Badge
-                      variant="destructive"
-                      className="absolute -top-2 -right-2 h-5 w-5 rounded-full p-0 text-xs flex items-center justify-center"
-                    >
-                      {unreadCount > 99 ? "99+" : unreadCount}
-                    </Badge>
-                  )}
-                </Button>
-              </Link>
+            <div className="flex items-center space-x-4 rtl:space-x-reverse">
+              <Button asChild size="sm" className="hidden sm:flex">
+                <Link href="/dashboard/create">
+                  <Plus className="h-4 w-4 ml-2" />
+                  إضافة منتج
+                </Link>
+              </Button>
 
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="sm">
-                    <User className="h-4 w-4 mr-2" />
-                    {user.name}
+                  <Button variant="ghost" className="relative h-8 w-8 rounded-full">
+                    <Avatar className="h-8 w-8">
+                      <AvatarImage src={user.image || ""} alt={user.name || ""} />
+                      <AvatarFallback>
+                        <User className="h-4 w-4" />
+                      </AvatarFallback>
+                    </Avatar>
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
+                <DropdownMenuContent className="w-56" align="end" forceMount>
+                  <div className="flex items-center justify-start gap-2 p-2">
+                    <div className="flex flex-col space-y-1 leading-none">
+                      {user.name && <p className="font-medium">{user.name}</p>}
+                      {user.email && <p className="w-[200px] truncate text-sm text-muted-foreground">{user.email}</p>}
+                    </div>
+                  </div>
+                  <DropdownMenuSeparator />
                   <DropdownMenuItem asChild>
-                    <Link href="/dashboard">لوحة التحكم</Link>
+                    <Link href="/dashboard" className="flex items-center space-x-2 rtl:space-x-reverse">
+                      <User className="h-4 w-4" />
+                      <span>لوحة التحكم</span>
+                    </Link>
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild>
-                    <Link href={`/profile/${user.id}`}>الملف الشخصي</Link>
+                    <Link href="/messages" className="flex items-center space-x-2 rtl:space-x-reverse relative">
+                      <MessageCircle className="h-4 w-4" />
+                      <span>الرسائل</span>
+                      {unreadMessages > 0 && (
+                        <Badge variant="destructive" className="h-4 w-4 rounded-full p-0 text-xs">
+                          {unreadMessages > 99 ? "99+" : unreadMessages}
+                        </Badge>
+                      )}
+                    </Link>
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild>
-                    <Link href="/dashboard/settings">
-                      <Settings className="h-4 w-4 mr-2" />
-                      الإعدادات
+                    <Link href="/dashboard/settings" className="flex items-center space-x-2 rtl:space-x-reverse">
+                      <Settings className="h-4 w-4" />
+                      <span>الإعدادات</span>
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={signOut}>
-                    <LogOut className="h-4 w-4 mr-2" />
-                    تسجيل الخروج
+                  <DropdownMenuItem
+                    className="cursor-pointer flex items-center space-x-2 rtl:space-x-reverse"
+                    onSelect={(event) => {
+                      event.preventDefault()
+                      signOut()
+                    }}
+                  >
+                    <LogOut className="h-4 w-4" />
+                    <span>تسجيل الخروج</span>
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
           ) : (
-            <Link href="/login">
-              <Button size="sm">تسجيل الدخول</Button>
-            </Link>
+            <Button asChild>
+              <Link href="/login">تسجيل الدخول</Link>
+            </Button>
           )}
+
+          {/* Mobile menu */}
+          <Sheet>
+            <SheetTrigger asChild>
+              <Button variant="ghost" size="sm" className="md:hidden">
+                <Menu className="h-5 w-5" />
+                <span className="sr-only">Toggle menu</span>
+              </Button>
+            </SheetTrigger>
+            <SheetContent side="right" className="w-80">
+              <div className="flex flex-col space-y-4 mt-4">
+                <div className="flex items-center space-x-2 rtl:space-x-reverse">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
+                    <Store className="h-5 w-5 text-primary-foreground" />
+                  </div>
+                  <span className="text-lg font-bold">متجر روبلوكس</span>
+                </div>
+
+                <div className="flex flex-col space-y-2">
+                  {navigation.map((item) => {
+                    const Icon = item.icon
+                    return (
+                      <Link
+                        key={item.name}
+                        href={item.href}
+                        className={`flex items-center space-x-2 rtl:space-x-reverse p-2 rounded-md transition-colors hover:bg-accent ${
+                          pathname === item.href ? "bg-accent text-accent-foreground" : "text-muted-foreground"
+                        }`}
+                      >
+                        <Icon className="h-4 w-4" />
+                        <span>{item.name}</span>
+                      </Link>
+                    )
+                  })}
+
+                  <div className="border-t pt-2">
+                    <p className="text-sm font-medium text-muted-foreground px-2 mb-2">الأدوات</p>
+                    {tools.map((tool) => {
+                      const Icon = tool.icon
+                      return (
+                        <Link
+                          key={tool.name}
+                          href={tool.href}
+                          className="flex items-center space-x-2 rtl:space-x-reverse p-2 rounded-md transition-colors hover:bg-accent text-muted-foreground"
+                        >
+                          <Icon className="h-4 w-4" />
+                          <span>{tool.name}</span>
+                        </Link>
+                      )
+                    })}
+                  </div>
+
+                  {user && (
+                    <div className="border-t pt-2">
+                      <Link
+                        href="/messages"
+                        className={`flex items-center space-x-2 rtl:space-x-reverse p-2 rounded-md transition-colors hover:bg-accent relative ${
+                          pathname === "/messages" ? "bg-accent text-accent-foreground" : "text-muted-foreground"
+                        }`}
+                      >
+                        <MessageCircle className="h-4 w-4" />
+                        <span>الرسائل</span>
+                        {unreadMessages > 0 && (
+                          <Badge variant="destructive" className="h-4 w-4 rounded-full p-0 text-xs">
+                            {unreadMessages > 99 ? "99+" : unreadMessages}
+                          </Badge>
+                        )}
+                      </Link>
+                    </div>
+                  )}
+                </div>
+
+                {user && (
+                  <div className="border-t pt-4">
+                    <Button asChild className="w-full mb-2">
+                      <Link href="/dashboard/create">
+                        <Plus className="h-4 w-4 ml-2" />
+                        إضافة منتج
+                      </Link>
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </SheetContent>
+          </Sheet>
         </div>
       </div>
 
-      <SearchDialog open={searchOpen} onOpenChange={setSearchOpen} />
-    </nav>
+      <SearchDialog open={isSearchOpen} onOpenChange={setIsSearchOpen} />
+    </header>
   )
 }

@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState, useRef, useEffect } from "react"
+import { useState, useRef } from "react"
 import { signIn, getSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
 import { zodResolver } from "@hookform/resolvers/zod"
@@ -36,17 +36,6 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [profileImage, setProfileImage] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
-
-  // التحقق من الجلسة الحالية
-  useEffect(() => {
-    const checkSession = async () => {
-      const session = await getSession()
-      if (session) {
-        router.push("/dashboard")
-      }
-    }
-    checkSession()
-  }, [router])
 
   const loginForm = useForm<z.infer<typeof loginSchema>>({
     resolver: zodResolver(loginSchema),
@@ -105,23 +94,21 @@ export default function LoginPage() {
       if (result?.error) {
         toast({
           title: "خطأ في تسجيل الدخول",
-          description: result.error,
+          description: "البريد الإلكتروني أو كلمة المرور غير صحيحة",
           variant: "destructive",
         })
         return
       }
 
-      if (result?.ok) {
+      // التحقق من الجلسة
+      const session = await getSession()
+      if (session) {
         toast({
           title: "مرحباً بك",
           description: "تم تسجيل الدخول بنجاح",
         })
-
-        // انتظار قصير للتأكد من تحديث الجلسة
-        setTimeout(() => {
-          router.push("/dashboard")
-          router.refresh()
-        }, 500)
+        router.push("/dashboard")
+        router.refresh()
       }
     } catch (error) {
       console.error("Login error:", error)
@@ -139,69 +126,39 @@ export default function LoginPage() {
     try {
       setIsLoading(true)
 
-      // إنشاء الحساب أولاً
-      const registerResponse = await fetch("/api/auth/register", {
+      const response = await fetch("/api/auth/register", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          name: values.name,
-          email: values.email,
-          password: values.password,
+          ...values,
           image: profileImage,
         }),
       })
 
-      if (!registerResponse.ok) {
-        const errorData = await registerResponse.json()
-        throw new Error(errorData.error || "فشل في إنشاء الحساب")
-      }
+      const data = await response.json()
 
-      const registerData = await registerResponse.json()
-
-      if (!registerData.success) {
-        throw new Error(registerData.error || "فشل في إنشاء الحساب")
+      if (!response.ok) {
+        throw new Error(data.error || "فشل في إنشاء الحساب")
       }
 
       toast({
         title: "تم إنشاء الحساب",
-        description: "تم إنشاء حسابك بنجاح، جاري تسجيل الدخول...",
+        description: "تم إنشاء حسابك بنجاح، يمكنك الآن تسجيل الدخول",
       })
 
-      // انتظار قصير ثم تسجيل الدخول
-      setTimeout(async () => {
-        try {
-          const result = await signIn("credentials", {
-            email: values.email,
-            password: values.password,
-            redirect: false,
-          })
+      // تسجيل الدخول تلقائياً
+      const result = await signIn("credentials", {
+        email: values.email,
+        password: values.password,
+        redirect: false,
+      })
 
-          if (result?.ok) {
-            toast({
-              title: "مرحباً بك",
-              description: "تم تسجيل الدخول بنجاح",
-            })
-
-            setTimeout(() => {
-              router.push("/dashboard")
-              router.refresh()
-            }, 500)
-          } else {
-            toast({
-              title: "تم إنشاء الحساب",
-              description: "تم إنشاء حسابك بنجاح، يرجى تسجيل الدخول يدوياً",
-            })
-          }
-        } catch (loginError) {
-          console.error("Auto login error:", loginError)
-          toast({
-            title: "تم إنشاء الحساب",
-            description: "تم إنشاء حسابك بنجاح، يرجى تسجيل الدخول يدوياً",
-          })
-        }
-      }, 1000)
+      if (result?.ok) {
+        router.push("/dashboard")
+        router.refresh()
+      }
     } catch (error: any) {
       console.error("Registration error:", error)
       toast({

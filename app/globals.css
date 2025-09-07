@@ -112,4 +112,89 @@
   .prose a {
     @apply text-primary font-medium no-underline hover:underline;
   }
+
+  /* تحسينات للجوال */
+  @media (max-width: 768px) {
+    .container {
+      @apply px-4;
+    }
+
+    .grid {
+      @apply gap-4;
+    }
+
+    .text-3xl {
+      @apply text-2xl;
+    }
+
+    .text-4xl {
+      @apply text-3xl;
+    }
+
+    .py-20 {
+      @apply py-12;
+    }
+
+    .py-8 {
+      @apply py-6;
+    }
+
+    .p-6 {
+      @apply p-4;
+    }
+
+    .space-y-6 > :not([hidden]) ~ :not([hidden]) {
+      @apply space-y-4;
+    }
+  }
+
+  /* تحسينات للتمرير الأفقي */
+  .snap-x {
+    scroll-snap-type: x mandatory;
+  }
+
+  .snap-start {
+    scroll-snap-align: start;
+  }
+
+  /* تحسينات للبطاقات */
+  .card-hover {
+    @apply transition-all duration-300 hover:shadow-lg hover:scale-[1.02];
+  }
+
+  /* تحسينات للأزرار */
+  .btn-responsive {
+    @apply px-3 py-2 text-sm md:px-4 md:py-2 md:text-base;
+  }
+
+  /* تحسينات للنصوص */
+  .text-responsive {
+    @apply text-sm md:text-base;
+  }
+
+  .heading-responsive {
+    @apply text-xl md:text-2xl lg:text-3xl;
+  }
+}
+
+/* تحسينات إضافية للجوال */
+@media (max-width: 640px) {
+  .grid-cols-1 {
+    grid-template-columns: repeat(1, minmax(0, 1fr));
+  }
+
+  .sm\:grid-cols-2 {
+    grid-template-columns: repeat(1, minmax(0, 1fr));
+  }
+
+  .lg\:grid-cols-4 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* تحسينات للتابلت */
+@media (min-width: 641px) and (max-width: 1024px) {
+  .lg\:grid-cols-4 {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
 }

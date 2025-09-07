@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button"
 import { ChevronLeft, ChevronRight } from "lucide-react"
 import { AssetCard } from "@/components/asset-card"
 import { LoadingSpinner } from "@/components/loading-spinner"
-import { getFeaturedAssets } from "@/lib/api"
 import type { Asset } from "@/lib/types"
 import { motion } from "framer-motion"
 
@@ -20,10 +19,14 @@ export function FeaturedAssets() {
   useEffect(() => {
     const fetchAssets = async () => {
       try {
-        const featuredAssets = await getFeaturedAssets()
-        setAssets(featuredAssets)
+        // جلب آخر المنتجات بدلاً من المنتجات المميزة
+        const response = await fetch("/api/assets?sort=latest&limit=10")
+        if (response.ok) {
+          const data = await response.json()
+          setAssets(data.assets || [])
+        }
       } catch (error) {
-        console.error("Error fetching featured assets:", error)
+        console.error("Error fetching latest assets:", error)
       } finally {
         setLoading(false)
       }
@@ -70,7 +73,7 @@ export function FeaturedAssets() {
           className="mb-8 flex flex-col gap-2"
         >
           <div className="flex items-center justify-between">
-            <h2 className="text-3xl font-bold tracking-tight">منتجات مميزة</h2>
+            <h2 className="text-3xl font-bold tracking-tight">آخر المنتجات</h2>
             <Button asChild variant="ghost" className="gap-1">
               <Link href="/assets">
                 عرض الكل
@@ -78,12 +81,16 @@ export function FeaturedAssets() {
               </Link>
             </Button>
           </div>
-          <p className="text-muted-foreground">اكتشف أفضل المنتجات المميزة في سوقنا</p>
+          <p className="text-muted-foreground">اكتشف أحدث المنتجات المضافة إلى سوقنا</p>
         </motion.div>
 
         {loading ? (
           <div className="flex h-64 items-center justify-center">
             <LoadingSpinner size="lg" />
+          </div>
+        ) : assets.length === 0 ? (
+          <div className="flex h-64 items-center justify-center">
+            <p className="text-muted-foreground">لا توجد منتجات متاحة حالياً</p>
           </div>
         ) : (
           <div className="relative">

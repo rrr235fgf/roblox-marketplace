@@ -36,13 +36,27 @@ export async function POST(request: NextRequest) {
     // تشفير كلمة المرور
     const hashedPassword = await bcrypt.hash(password, 12)
 
+    // معالجة الصورة - التأكد من أنها base64 صالحة أو رابط
+    let processedImage = null
+    if (image && image.trim()) {
+      // إذا كانت الصورة base64
+      if (image.startsWith("data:image/")) {
+        processedImage = image
+      }
+      // إذا كانت رابط URL
+      else if (image.startsWith("http://") || image.startsWith("https://")) {
+        processedImage = image
+      }
+      // إذا لم تكن صالحة، نتجاهلها
+    }
+
     // إنشاء المستخدم
     const now = new Date()
     const result = await db.collection("users").insertOne({
       name: name.trim(),
       email: email.toLowerCase().trim(),
       password: hashedPassword,
-      image: image || null,
+      image: processedImage,
       emailVerified: now, // تفعيل تلقائي
       likes: 0,
       createdAt: now,

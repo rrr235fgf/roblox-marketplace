@@ -47,10 +47,10 @@ export default function AssetsPage() {
             <TabsTrigger value="all">الكل</TabsTrigger>
             <TabsTrigger value="mm2">ام ام تو</TabsTrigger>
             <TabsTrigger value="bloxfruit">بلوكس فروت</TabsTrigger>
-            <TabsTrigger value="timewar">حرب الوقت</TabsTrigger>
+            <TabsTrigger value="farmmap">ماب المزرعة</TabsTrigger>
+            <TabsTrigger value="stealcharacters">اسرق الشخصيات</TabsTrigger>
             <TabsTrigger value="robux">روبوكس</TabsTrigger>
             <TabsTrigger value="accounts">حسابات</TabsTrigger>
-            <TabsTrigger value="development">تطوير</TabsTrigger>
             <TabsTrigger value="other">اشياء اخرى</TabsTrigger>
           </TabsList>
           <TabsContent value="all">
@@ -80,13 +80,22 @@ export default function AssetsPage() {
               <AssetGrid category="bloxfruit" searchQuery={searchQuery} />
             )}
           </TabsContent>
-          <TabsContent value="timewar">
+          <TabsContent value="farmmap">
             {isLoading ? (
               <div className="flex h-64 items-center justify-center">
                 <LoadingSpinner size="lg" />
               </div>
             ) : (
-              <AssetGrid category="timewar" searchQuery={searchQuery} />
+              <AssetGrid category="farmmap" searchQuery={searchQuery} />
+            )}
+          </TabsContent>
+          <TabsContent value="stealcharacters">
+            {isLoading ? (
+              <div className="flex h-64 items-center justify-center">
+                <LoadingSpinner size="lg" />
+              </div>
+            ) : (
+              <AssetGrid category="stealcharacters" searchQuery={searchQuery} />
             )}
           </TabsContent>
           <TabsContent value="robux">
@@ -105,15 +114,6 @@ export default function AssetsPage() {
               </div>
             ) : (
               <AssetGrid category="accounts" searchQuery={searchQuery} />
-            )}
-          </TabsContent>
-          <TabsContent value="development">
-            {isLoading ? (
-              <div className="flex h-64 items-center justify-center">
-                <LoadingSpinner size="lg" />
-              </div>
-            ) : (
-              <AssetGrid category="development" searchQuery={searchQuery} />
             )}
           </TabsContent>
           <TabsContent value="other">

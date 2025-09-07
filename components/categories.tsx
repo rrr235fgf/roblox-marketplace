@@ -3,65 +3,58 @@
 import Link from "next/link"
 import { Card, CardContent, CardFooter } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { ChevronLeft, Code, Gamepad2, Package, Coins, User } from "lucide-react"
+import { ChevronLeft } from "lucide-react"
 import { motion } from "framer-motion"
 
 const categories = [
   {
     title: "ام ام تو",
     description: "منتجات خاصة بلعبة ام ام تو",
-    icon: Gamepad2,
+    image: "/placeholder.svg?height=80&width=80&text=MM2",
     href: "/assets?category=mm2",
     color: "bg-blue-500/10 text-blue-600 dark:text-blue-400",
-    iconColor: "text-blue-500",
   },
   {
     title: "بلوكس فروت",
     description: "منتجات خاصة بلعبة بلوكس فروت",
-    icon: Gamepad2,
+    image: "/placeholder.svg?height=80&width=80&text=Blox+Fruit",
     href: "/assets?category=bloxfruit",
     color: "bg-green-500/10 text-green-600 dark:text-green-400",
-    iconColor: "text-green-500",
   },
   {
-    title: "حرب الوقت",
-    description: "منتجات خاصة بلعبة حرب الوقت",
-    icon: Gamepad2,
-    href: "/assets?category=timewar",
+    title: "ماب المزرعة",
+    description: "منتجات خاصة بلعبة ماب المزرعة",
+    image: "/placeholder.svg?height=80&width=80&text=Farm+Map",
+    href: "/assets?category=farmmap",
+    color: "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400",
+  },
+  {
+    title: "اسرق الشخصيات",
+    description: "منتجات خاصة بلعبة اسرق الشخصيات",
+    image: "/placeholder.svg?height=80&width=80&text=Steal+Characters",
+    href: "/assets?category=stealcharacters",
     color: "bg-purple-500/10 text-purple-600 dark:text-purple-400",
-    iconColor: "text-purple-500",
   },
   {
     title: "روبوكس",
     description: "روبوكس بأسعار مناسبة",
-    icon: Coins,
+    image: "/placeholder.svg?height=80&width=80&text=Robux",
     href: "/assets?category=robux",
     color: "bg-red-500/10 text-red-600 dark:text-red-400",
-    iconColor: "text-red-500",
   },
   {
     title: "حسابات",
     description: "حسابات روبلوكس متنوعة",
-    icon: User,
+    image: "/placeholder.svg?height=80&width=80&text=Accounts",
     href: "/assets?category=accounts",
-    color: "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400",
-    iconColor: "text-yellow-500",
-  },
-  {
-    title: "تطوير",
-    description: "خدمات تطوير وبرمجة",
-    icon: Code,
-    href: "/assets?category=development",
     color: "bg-indigo-500/10 text-indigo-600 dark:text-indigo-400",
-    iconColor: "text-indigo-500",
   },
   {
     title: "اشياء اخرى",
     description: "منتجات متنوعة أخرى",
-    icon: Package,
+    image: "/placeholder.svg?height=80&width=80&text=Other",
     href: "/assets?category=other",
     color: "bg-orange-500/10 text-orange-600 dark:text-orange-400",
-    iconColor: "text-orange-500",
   },
 ]
 
@@ -93,11 +86,17 @@ export function Categories() {
             >
               <Card className="group h-full overflow-hidden transition-all duration-300 hover:shadow-md hover:shadow-primary/5">
                 <CardContent className="p-6">
-                  <div className={`mb-4 flex h-14 w-14 items-center justify-center rounded-full ${category.color}`}>
-                    <category.icon className={`h-7 w-7 ${category.iconColor}`} />
+                  <div
+                    className={`mb-4 flex h-20 w-20 items-center justify-center rounded-full mx-auto ${category.color}`}
+                  >
+                    <img
+                      src={category.image || "/placeholder.svg"}
+                      alt={category.title}
+                      className="h-16 w-16 rounded-full object-cover"
+                    />
                   </div>
-                  <h3 className="mb-2 text-xl font-bold">{category.title}</h3>
-                  <p className="text-muted-foreground">{category.description}</p>
+                  <h3 className="mb-2 text-xl font-bold text-center">{category.title}</h3>
+                  <p className="text-muted-foreground text-center">{category.description}</p>
                 </CardContent>
                 <CardFooter className="border-t bg-muted/30 px-6 py-4">
                   <Button asChild variant="ghost" className="w-full justify-between group-hover:text-primary">
