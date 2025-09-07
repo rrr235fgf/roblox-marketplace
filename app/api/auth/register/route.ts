@@ -1,22 +1,15 @@
 import { type NextRequest, NextResponse } from "next/server"
 import bcrypt from "bcryptjs"
 import { MongoClient } from "mongodb"
-import { v2 as cloudinary } from "cloudinary"
 
 const client = new MongoClient(process.env.MONGODB_URI!)
-
-// إعداد Cloudinary
-cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET,
-})
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
     const { name, email, password, image } = body
 
+    // التحقق من البيانات
     if (!name || !email || !password) {
       return NextResponse.json({ error: "جميع الحقول مطلوبة" }, { status: 400 })
     }
@@ -33,26 +26,22 @@ export async function POST(request: NextRequest) {
     await client.connect()
     const db = client.db("roblox_marketplace")
 
+    // التحقق من وجود المستخدم
     const existingUser = await db.collection("users").findOne({ email })
     if (existingUser) {
       return NextResponse.json({ error: "البريد الإلكتروني مستخدم بالفعل" }, { status: 400 })
     }
 
+    // تشفير كلمة المرور
     const hashedPassword = await bcrypt.hash(password, 12)
 
-    // معالجة الصورة
-    let processedImage = "/default-avatar.png" // صورة افتراضية
-    if (image && image.startsWith("data:image/")) {
-      // رفع الصورة إلى Cloudinary
-      const uploadResult = await cloudinary.uploader.upload(image, {
-        folder: "profile_images",
-        transformation: [{ width: 300, height: 300, crop: "fill" }],
-      })
-      processedImage = uploadResult.secure_url
-    } else if (image && (image.startsWith("http://") || image.startsWith("https://"))) {
+    // معالجة الصورة - بدون Base64، استخدم رابط افتراضي
+    let processedImage = "/default-avatar.png" // أي صورة افتراضية عندك
+    if (image && (image.startsWith("http://") || image.startsWith("https://"))) {
       processedImage = image
     }
 
+    // إنشاء المستخدم
     const now = new Date()
     const result = await db.collection("users").insertOne({
       name: name.trim(),
