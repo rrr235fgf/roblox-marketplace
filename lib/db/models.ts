@@ -8,11 +8,6 @@ export interface User {
   createdAt: Date
   updatedAt: Date
   likes?: number
-  socialAccounts?: {
-    discord?: string | null
-    tiktok?: string | null
-    instagram?: string | null
-  }
 }
 
 export interface Asset {
@@ -52,4 +47,21 @@ export interface ProfileLike {
   profileId: string
   userId: string
   createdAt: Date
+}
+
+export interface ChatMessage {
+  id: string
+  senderId: string
+  receiverId: string
+  message: string
+  isRead: boolean
+  createdAt: Date
+}
+
+export interface ChatConversation {
+  id: string
+  participants: string[]
+  lastMessage?: string
+  lastMessageAt?: Date
+  unreadCount: { [userId: string]: number }
 }

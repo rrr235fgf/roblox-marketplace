@@ -30,6 +30,7 @@ export async function getUserById(id: string): Promise<User | null> {
       emailVerified: user.emailVerified,
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
+      likes: user.likes || 0,
     }
   } catch (error) {
     console.error("Error getting user by ID:", error)
@@ -52,6 +53,7 @@ export async function getUserByEmail(email: string): Promise<User | null> {
       emailVerified: user.emailVerified,
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
+      likes: user.likes || 0,
     }
   } catch (error) {
     console.error("Error getting user by email:", error)
@@ -66,6 +68,7 @@ export async function createUser(userData: Omit<User, "id" | "createdAt" | "upda
 
     const result = await db.collection("users").insertOne({
       ...userData,
+      likes: 0,
       createdAt: now,
       updatedAt: now,
     })
@@ -73,6 +76,7 @@ export async function createUser(userData: Omit<User, "id" | "createdAt" | "upda
     return {
       id: result.insertedId.toString(),
       ...userData,
+      likes: 0,
       createdAt: now,
       updatedAt: now,
     }
@@ -107,6 +111,7 @@ export async function updateUser(id: string, updates: Partial<User>): Promise<Us
       emailVerified: result.emailVerified,
       createdAt: result.createdAt,
       updatedAt: result.updatedAt,
+      likes: result.likes || 0,
     }
   } catch (error) {
     console.error("Error updating user:", error)
@@ -114,7 +119,7 @@ export async function updateUser(id: string, updates: Partial<User>): Promise<Us
   }
 }
 
-// Asset functions
+// Asset functions with seller info
 export async function getAssets(filters?: {
   category?: string
   search?: string
@@ -158,21 +163,42 @@ export async function getAssets(filters?: {
 
     const assets = await cursor.toArray()
 
-    return assets.map((asset) => ({
-      id: asset._id.toString(),
-      title: asset.title,
-      description: asset.description,
-      price: asset.price,
-      category: asset.category,
-      paymentMethod: asset.paymentMethod,
-      images: asset.images,
-      sellerId: asset.sellerId,
-      featured: asset.featured || false,
-      rating: asset.rating || 0,
-      reviewCount: asset.reviewCount || 0,
-      createdAt: asset.createdAt,
-      updatedAt: asset.updatedAt,
-    }))
+    // جلب معلومات البائعين
+    const sellerIds = [...new Set(assets.map((asset) => asset.sellerId))]
+    const sellers = await db
+      .collection("users")
+      .find({ _id: { $in: sellerIds.map((id) => new ObjectId(id)) } })
+      .toArray()
+
+    return assets.map((asset) => {
+      const seller = sellers.find((s) => s._id.toString() === asset.sellerId)
+      return {
+        id: asset._id.toString(),
+        title: asset.title,
+        description: asset.description,
+        price: asset.price,
+        category: asset.category,
+        paymentMethod: asset.paymentMethod,
+        images: asset.images,
+        sellerId: asset.sellerId,
+        featured: asset.featured || false,
+        rating: asset.rating || 0,
+        reviewCount: asset.reviewCount || 0,
+        createdAt: asset.createdAt,
+        updatedAt: asset.updatedAt,
+        seller: {
+          id: seller?._id.toString() || asset.sellerId,
+          username: seller?.name || "مستخدم غير معروف",
+          avatar: seller?.image || null,
+          badges: [],
+          joinDate: seller?.createdAt?.toISOString() || new Date().toISOString(),
+          totalSales: 0,
+          listedAssets: 0,
+          averageRating: 0,
+          likes: seller?.likes || 0,
+        },
+      }
+    })
   } catch (error) {
     console.error("Error getting assets:", error)
     return []
@@ -185,6 +211,9 @@ export async function getAssetById(id: string): Promise<Asset | null> {
     const asset = await db.collection("assets").findOne({ _id: new ObjectId(id) })
     if (!asset) return null
 
+    // جلب معلومات البائع
+    const seller = await db.collection("users").findOne({ _id: new ObjectId(asset.sellerId) })
+
     return {
       id: asset._id.toString(),
       title: asset.title,
@@ -199,6 +228,17 @@ export async function getAssetById(id: string): Promise<Asset | null> {
       reviewCount: asset.reviewCount || 0,
       createdAt: asset.createdAt,
       updatedAt: asset.updatedAt,
+      seller: {
+        id: seller?._id.toString() || asset.sellerId,
+        username: seller?.name || "مستخدم غير معروف",
+        avatar: seller?.image || null,
+        badges: [],
+        joinDate: seller?.createdAt?.toISOString() || new Date().toISOString(),
+        totalSales: 0,
+        listedAssets: 0,
+        averageRating: 0,
+        likes: seller?.likes || 0,
+      },
     }
   } catch (error) {
     console.error("Error getting asset by ID:", error)
@@ -207,14 +247,20 @@ export async function getAssetById(id: string): Promise<Asset | null> {
 }
 
 export async function createAsset(
-  assetData: Omit<Asset, "id" | "createdAt" | "updatedAt" | "rating" | "reviewCount" | "featured">,
+  assetData: Omit<Asset, "id" | "createdAt" | "updatedAt" | "rating" | "reviewCount" | "featured" | "seller">,
 ): Promise<Asset> {
   try {
     const db = await connectToDatabase()
     const now = new Date()
 
     const result = await db.collection("assets").insertOne({
-      ...assetData,
+      title: assetData.title,
+      description: assetData.description,
+      price: assetData.price,
+      category: assetData.category,
+      paymentMethod: assetData.paymentMethod,
+      images: assetData.images,
+      sellerId: assetData.sellerId,
       featured: false,
       rating: 0,
       reviewCount: 0,
@@ -222,14 +268,34 @@ export async function createAsset(
       updatedAt: now,
     })
 
+    // جلب معلومات البائع
+    const seller = await db.collection("users").findOne({ _id: new ObjectId(assetData.sellerId) })
+
     return {
       id: result.insertedId.toString(),
-      ...assetData,
+      title: assetData.title,
+      description: assetData.description,
+      price: assetData.price,
+      category: assetData.category,
+      paymentMethod: assetData.paymentMethod,
+      images: assetData.images,
+      sellerId: assetData.sellerId,
       featured: false,
       rating: 0,
       reviewCount: 0,
       createdAt: now,
       updatedAt: now,
+      seller: {
+        id: seller?._id.toString() || assetData.sellerId,
+        username: seller?.name || "مستخدم غير معروف",
+        avatar: seller?.image || null,
+        badges: [],
+        joinDate: seller?.createdAt?.toISOString() || new Date().toISOString(),
+        totalSales: 0,
+        listedAssets: 0,
+        averageRating: 0,
+        likes: seller?.likes || 0,
+      },
     }
   } catch (error) {
     console.error("Error creating asset:", error)
@@ -253,6 +319,9 @@ export async function updateAsset(id: string, updates: Partial<Asset>): Promise<
 
     if (!result) return null
 
+    // جلب معلومات البائع
+    const seller = await db.collection("users").findOne({ _id: new ObjectId(result.sellerId) })
+
     return {
       id: result._id.toString(),
       title: result.title,
@@ -267,6 +336,17 @@ export async function updateAsset(id: string, updates: Partial<Asset>): Promise<
       reviewCount: result.reviewCount || 0,
       createdAt: result.createdAt,
       updatedAt: result.updatedAt,
+      seller: {
+        id: seller?._id.toString() || result.sellerId,
+        username: seller?.name || "مستخدم غير معروف",
+        avatar: seller?.image || null,
+        badges: [],
+        joinDate: seller?.createdAt?.toISOString() || new Date().toISOString(),
+        totalSales: 0,
+        listedAssets: 0,
+        averageRating: 0,
+        likes: seller?.likes || 0,
+      },
     }
   } catch (error) {
     console.error("Error updating asset:", error)
@@ -320,7 +400,6 @@ export async function createReview(reviewData: Omit<Review, "id" | "createdAt">)
       createdAt: now,
     })
 
-    // Update asset rating
     await updateAssetRating(reviewData.assetId)
 
     return {
@@ -427,7 +506,7 @@ export async function createEmailVerificationToken(userId: string, email: string
   try {
     const db = await connectToDatabase()
     const token = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15)
-    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 hours
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000)
 
     await db.collection("email_verification_tokens").insertOne({
       token,
@@ -454,7 +533,6 @@ export async function verifyEmailToken(token: string): Promise<{ userId: string;
 
     if (!verification) return null
 
-    // Delete the token after verification
     await db.collection("email_verification_tokens").deleteOne({ _id: verification._id })
 
     return {
@@ -464,5 +542,57 @@ export async function verifyEmailToken(token: string): Promise<{ userId: string;
   } catch (error) {
     console.error("Error verifying email token:", error)
     return null
+  }
+}
+
+// Profile likes functions
+export async function toggleProfileLike(
+  profileId: string,
+  userId: string,
+): Promise<{ isLiked: boolean; likesCount: number }> {
+  try {
+    const db = await connectToDatabase()
+
+    const existingLike = await db.collection("profile_likes").findOne({
+      profileId,
+      userId,
+    })
+
+    if (existingLike) {
+      // إلغاء الإعجاب
+      await db.collection("profile_likes").deleteOne({ _id: existingLike._id })
+      await db.collection("users").updateOne({ _id: new ObjectId(profileId) }, { $inc: { likes: -1 } })
+
+      const user = await db.collection("users").findOne({ _id: new ObjectId(profileId) })
+      return { isLiked: false, likesCount: user?.likes || 0 }
+    } else {
+      // إضافة إعجاب
+      await db.collection("profile_likes").insertOne({
+        profileId,
+        userId,
+        createdAt: new Date(),
+      })
+      await db.collection("users").updateOne({ _id: new ObjectId(profileId) }, { $inc: { likes: 1 } })
+
+      const user = await db.collection("users").findOne({ _id: new ObjectId(profileId) })
+      return { isLiked: true, likesCount: user?.likes || 0 }
+    }
+  } catch (error) {
+    console.error("Error toggling profile like:", error)
+    throw new Error("فشل في تسجيل الإعجاب")
+  }
+}
+
+export async function checkProfileLike(profileId: string, userId: string): Promise<boolean> {
+  try {
+    const db = await connectToDatabase()
+    const like = await db.collection("profile_likes").findOne({
+      profileId,
+      userId,
+    })
+    return !!like
+  } catch (error) {
+    console.error("Error checking profile like:", error)
+    return false
   }
 }

@@ -4,7 +4,7 @@ import { useEffect, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { MessageCircle, Share2, Shield, Clock, ArrowLeft, X, Maximize } from "lucide-react"
+import { MessageCircle, Share2, Shield, Clock, ArrowLeft, X, Maximize, User } from "lucide-react"
 import { Navbar } from "@/components/navbar"
 import { LoadingSpinner } from "@/components/loading-spinner"
 import { useAuth } from "@/hooks/use-auth"
@@ -35,7 +35,6 @@ export default function AssetPage() {
 
           if (assetData) {
             setAsset(assetData)
-            // Set document title with product name
             document.title = `${assetData.title} | سوق روبلوكس`
           } else {
             setError("لم يتم العثور على المنتج")
@@ -57,27 +56,60 @@ export default function AssetPage() {
     fetchAsset()
   }, [id])
 
-  const handleContactSeller = () => {
-    if (!asset) return
-
-    // التحقق من وجود معرف Discord للبائع
-    if (!asset.seller?.discordId) {
+  const handleContactSeller = async () => {
+    if (!asset || !user) {
       toast({
-        title: "خطأ",
-        description: "معرف Discord للبائع غير متوفر",
+        title: "تسجيل الدخول مطلوب",
+        description: "يجب تسجيل الدخول للتواصل مع البائع",
         variant: "destructive",
       })
       return
     }
 
-    // Open Discord DM with the seller
-    window.open(`https://discord.com/users/${asset.seller.discordId}`, "_blank")
+    if (user.id === asset.seller.id) {
+      toast({
+        title: "غير مسموح",
+        description: "لا يمكنك التواصل مع نفسك",
+        variant: "destructive",
+      })
+      return
+    }
+
+    // إنشاء محادثة جديدة أو الانتقال إلى المحادثة الموجودة
+    try {
+      const response = await fetch("/api/messages/send", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          receiverId: asset.seller.id,
+          message: `مرحباً، أنا مهتم بمنتجك: ${asset.title}`,
+        }),
+      })
+
+      if (response.ok) {
+        toast({
+          title: "تم إرسال الرسالة",
+          description: "تم إرسال رسالة للبائع بنجاح",
+        })
+        router.push("/messages")
+      } else {
+        throw new Error("فشل في إرسال الرسالة")
+      }
+    } catch (error) {
+      console.error("Error contacting seller:", error)
+      toast({
+        title: "خطأ",
+        description: "حدث خطأ أثناء التواصل مع البائع",
+        variant: "destructive",
+      })
+    }
   }
 
   const handleShare = () => {
     if (!asset) return
 
-    // نسخ رابط المنتج إلى الحافظة
     const url = `${window.location.origin}/assets/${asset.id}`
     navigator.clipboard
       .writeText(url)
@@ -113,7 +145,6 @@ export default function AssetPage() {
 
   const categoryColor = asset?.category ? categoryColors[asset.category] || categoryColors["اشياء اخرى"] : ""
 
-  // تنسيق التاريخ بالتقويم الميلادي
   const formatDate = (dateString: string) => {
     try {
       const date = new Date(dateString)
@@ -127,7 +158,6 @@ export default function AssetPage() {
     }
   }
 
-  // عرض أيقونة طريقة الدفع
   const renderPaymentIcon = () => {
     if (!asset || !asset.paymentMethod) return null
 
@@ -143,7 +173,6 @@ export default function AssetPage() {
     }
   }
 
-  // الحصول على اسم طريقة الدفع
   const getPaymentMethodName = () => {
     if (!asset || !asset.paymentMethod) return "روبوكس"
 
@@ -158,6 +187,8 @@ export default function AssetPage() {
         return "روبوكس"
     }
   }
+
+  const validImages = Array.isArray(asset?.images) && asset?.images.length > 0 ? asset?.images : ["/placeholder.svg"]
 
   if (loading) {
     return (
@@ -177,7 +208,7 @@ export default function AssetPage() {
         <div className="flex flex-1 items-center justify-center">
           <div className="text-center">
             <p className="text-xl text-destructive">{error || "لم يتم العثور على المنتج"}</p>
-            <Button variant="outline" className="mt-4" onClick={() => router.push("/assets")}>
+            <Button variant="outline" className="mt-4 bg-transparent" onClick={() => router.push("/assets")}>
               العودة إلى المنتجات
             </Button>
           </div>
@@ -185,9 +216,6 @@ export default function AssetPage() {
       </div>
     )
   }
-
-  // التأكد من وجود صور صالحة
-  const validImages = Array.isArray(asset.images) && asset.images.length > 0 ? asset.images : ["/placeholder.svg"]
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -212,7 +240,6 @@ export default function AssetPage() {
                 className="object-cover"
                 unoptimized
                 onError={(e) => {
-                  // إذا فشل تحميل الصورة، استخدم صورة بديلة
                   const target = e.target as HTMLImageElement
                   target.src = "/placeholder.svg"
                 }}
@@ -243,7 +270,6 @@ export default function AssetPage() {
                     className="object-cover"
                     unoptimized
                     onError={(e) => {
-                      // إذا فشل تحميل الصورة، استخدم صورة بديلة
                       const target = e.target as HTMLImageElement
                       target.src = "/placeholder.svg"
                     }}
@@ -307,11 +333,15 @@ export default function AssetPage() {
                   className="object-cover"
                   unoptimized
                   onError={(e) => {
-                    // إذا فشل تحميل الصورة، استخدم صورة بديلة
                     const target = e.target as HTMLImageElement
                     target.src = "/placeholder.svg"
                   }}
                 />
+                {!asset.seller?.avatar && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-muted">
+                    <User className="h-6 w-6 text-muted-foreground" />
+                  </div>
+                )}
               </div>
               <div className="flex-1">
                 <p className="font-medium">{asset.seller?.username || "البائع"}</p>
@@ -364,7 +394,6 @@ export default function AssetPage() {
         </div>
       </main>
 
-      {/* Modal para imagen a pantalla completa */}
       {isImageFullscreen && (
         <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4">
           <div className="relative w-full max-w-4xl max-h-[90vh]">

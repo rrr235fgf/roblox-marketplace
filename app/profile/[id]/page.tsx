@@ -1,19 +1,18 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { useParams } from "next/navigation"
+import { useParams, useRouter } from "next/navigation"
 import Image from "next/image"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { Button } from "@/components/ui/button"
-import { Heart } from "lucide-react"
+import { Heart, MessageCircle, User } from "lucide-react"
 import { Navbar } from "@/components/navbar"
 import { LoadingSpinner } from "@/components/loading-spinner"
 import { AssetGrid } from "@/components/asset-grid"
 import { useToast } from "@/hooks/use-toast"
 import { useAuth } from "@/hooks/use-auth"
-import { DiscordIcon, TikTokIcon, InstagramIcon } from "@/components/social-icons"
 import { getUserProfile } from "@/lib/api"
 import type { Seller } from "@/lib/types"
 
@@ -21,6 +20,7 @@ export default function ProfilePage() {
   const { id } = useParams()
   const { user } = useAuth()
   const { toast } = useToast()
+  const router = useRouter()
   const [seller, setSeller] = useState<Seller | null>(null)
   const [loading, setLoading] = useState(true)
   const [isLiked, setIsLiked] = useState(false)
@@ -35,7 +35,6 @@ export default function ProfilePage() {
           setSeller(userData)
           setLikesCount(userData.likes || 0)
 
-          // التحقق من إعجاب المستخدم الحالي
           if (user) {
             const response = await fetch(`/api/profile/${id}/like-status`)
             if (response.ok) {
@@ -103,21 +102,53 @@ export default function ProfilePage() {
     }
   }
 
-  const handleContactSeller = (platform: string, username: string) => {
-    let url = ""
-    switch (platform) {
-      case "discord":
-        url = `https://discord.com/users/${username}`
-        break
-      case "tiktok":
-        url = `https://www.tiktok.com/@${username}`
-        break
-      case "instagram":
-        url = `https://www.instagram.com/${username}`
-        break
+  const handleContactSeller = async () => {
+    if (!user) {
+      toast({
+        title: "تسجيل الدخول مطلوب",
+        description: "يجب تسجيل الدخول للتواصل مع المستخدم",
+        variant: "destructive",
+      })
+      return
     }
-    if (url) {
-      window.open(url, "_blank")
+
+    if (user.id === id) {
+      toast({
+        title: "غير مسموح",
+        description: "لا يمكنك التواصل مع نفسك",
+        variant: "destructive",
+      })
+      return
+    }
+
+    try {
+      const response = await fetch("/api/messages/send", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          receiverId: id,
+          message: `مرحباً ${seller?.username}!`,
+        }),
+      })
+
+      if (response.ok) {
+        toast({
+          title: "تم إرسال الرسالة",
+          description: "تم إرسال رسالة للمستخدم بنجاح",
+        })
+        router.push("/messages")
+      } else {
+        throw new Error("فشل في إرسال الرسالة")
+      }
+    } catch (error) {
+      console.error("Error contacting user:", error)
+      toast({
+        title: "خطأ",
+        description: "حدث خطأ أثناء التواصل مع المستخدم",
+        variant: "destructive",
+      })
     }
   }
 
@@ -143,10 +174,9 @@ export default function ProfilePage() {
     )
   }
 
-  // تنسيق التاريخ بالتقويم الهجري
   const formatDate = (dateString: string) => {
     const date = new Date(dateString)
-    return date.toLocaleDateString("ar-SA", {
+    return date.toLocaleDateString("en-US", {
       year: "numeric",
       month: "long",
       day: "numeric",
@@ -158,13 +188,22 @@ export default function ProfilePage() {
       <Navbar />
       <main className="container py-8">
         <div className="flex flex-col items-center gap-6 md:flex-row md:items-start">
-          <div className="relative h-32 w-32 overflow-hidden rounded-full">
+          <div className="relative h-32 w-32 overflow-hidden rounded-full border">
             <Image
               src={seller.avatar || "/placeholder.svg?height=128&width=128"}
               alt={seller.username}
               fill
               className="object-cover"
+              onError={(e) => {
+                const target = e.target as HTMLImageElement
+                target.src = "/placeholder.svg?height=128&width=128"
+              }}
             />
+            {!seller.avatar && (
+              <div className="absolute inset-0 flex items-center justify-center bg-muted">
+                <User className="h-16 w-16 text-muted-foreground" />
+              </div>
+            )}
           </div>
           <div className="flex flex-1 flex-col gap-4 text-center md:text-right">
             <div>
@@ -203,40 +242,15 @@ export default function ProfilePage() {
               {isLiked ? "معجب" : "إعجاب"}
             </Button>
 
-            {seller.socialAccounts && (
-              <div className="flex flex-col gap-2">
-                {seller.socialAccounts.discord && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleContactSeller("discord", seller.socialAccounts.discord)}
-                  >
-                    <DiscordIcon className="mr-2 h-4 w-4 text-[#5865F2]" />
-                    Discord
-                  </Button>
-                )}
-                {seller.socialAccounts.tiktok && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleContactSeller("tiktok", seller.socialAccounts.tiktok)}
-                  >
-                    <TikTokIcon className="mr-2 h-4 w-4" />
-                    TikTok
-                  </Button>
-                )}
-                {seller.socialAccounts.instagram && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleContactSeller("instagram", seller.socialAccounts.instagram)}
-                  >
-                    <InstagramIcon className="mr-2 h-4 w-4 text-[#E4405F]" />
-                    Instagram
-                  </Button>
-                )}
-              </div>
-            )}
+            <Button
+              onClick={handleContactSeller}
+              disabled={!user || user?.id === id}
+              variant="outline"
+              className="md:self-start bg-transparent"
+            >
+              <MessageCircle className="mr-2 h-4 w-4" />
+              إرسال رسالة
+            </Button>
           </div>
         </div>
 

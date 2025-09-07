@@ -1,6 +1,8 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import type React from "react"
+
+import { useState, useRef } from "react"
 import { signIn, getSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
 import { zodResolver } from "@hookform/resolvers/zod"
@@ -11,43 +13,29 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Navbar } from "@/components/navbar"
-import { LoadingSpinner } from "@/components/loading-spinner"
 import { useToast } from "@/hooks/use-toast"
+import { LoadingSpinner } from "@/components/loading-spinner"
+import { Navbar } from "@/components/navbar"
+import { User, Upload, X } from "lucide-react"
+import Image from "next/image"
 
 const loginSchema = z.object({
-  email: z.string().email({ message: "البريد الإلكتروني غير صحيح" }),
-  password: z.string().min(6, { message: "كلمة المرور يجب أن تكون 6 أحرف على الأقل" }),
+  email: z.string().email("البريد الإلكتروني غير صالح"),
+  password: z.string().min(6, "كلمة المرور يجب أن تكون 6 أحرف على الأقل"),
 })
 
-const registerSchema = z
-  .object({
-    name: z.string().min(2, { message: "الاسم يجب أن يكون حرفين على الأقل" }),
-    email: z.string().email({ message: "البريد الإلكتروني غير صحيح" }),
-    password: z.string().min(6, { message: "كلمة المرور يجب أن تكون 6 أحرف على الأقل" }),
-    confirmPassword: z.string(),
-  })
-  .refine((data) => data.password === data.confirmPassword, {
-    message: "كلمات المرور غير متطابقة",
-    path: ["confirmPassword"],
-  })
+const registerSchema = z.object({
+  name: z.string().min(2, "الاسم يجب أن يكون حرفين على الأقل"),
+  email: z.string().email("البريد الإلكتروني غير صالح"),
+  password: z.string().min(6, "كلمة المرور يجب أن تكون 6 أحرف على الأقل"),
+})
 
 export default function LoginPage() {
   const router = useRouter()
   const { toast } = useToast()
   const [isLoading, setIsLoading] = useState(false)
-  const [activeTab, setActiveTab] = useState("login")
-
-  // التحقق من الجلسة الحالية
-  useEffect(() => {
-    const checkSession = async () => {
-      const session = await getSession()
-      if (session) {
-        router.push("/dashboard")
-      }
-    }
-    checkSession()
-  }, [router])
+  const [profileImage, setProfileImage] = useState<string | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const loginForm = useForm<z.infer<typeof loginSchema>>({
     resolver: zodResolver(loginSchema),
@@ -63,9 +51,35 @@ export default function LoginPage() {
       name: "",
       email: "",
       password: "",
-      confirmPassword: "",
     },
   })
+
+  const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) {
+        toast({
+          title: "خطأ",
+          description: "حجم الصورة يجب أن يكون أقل من 5 ميجابايت",
+          variant: "destructive",
+        })
+        return
+      }
+
+      const reader = new FileReader()
+      reader.onload = (e) => {
+        setProfileImage(e.target?.result as string)
+      }
+      reader.readAsDataURL(file)
+    }
+  }
+
+  const removeImage = () => {
+    setProfileImage(null)
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ""
+    }
+  }
 
   const onLogin = async (values: z.infer<typeof loginSchema>) => {
     try {
@@ -74,31 +88,33 @@ export default function LoginPage() {
       const result = await signIn("credentials", {
         email: values.email,
         password: values.password,
-        action: "login",
         redirect: false,
       })
 
       if (result?.error) {
         toast({
           title: "خطأ في تسجيل الدخول",
-          description: result.error,
+          description: "البريد الإلكتروني أو كلمة المرور غير صحيحة",
           variant: "destructive",
         })
         return
       }
 
-      if (result?.ok) {
+      // التحقق من الجلسة
+      const session = await getSession()
+      if (session) {
         toast({
-          title: "تم تسجيل الدخول بنجاح",
-          description: "مرحباً بك في سوق المنتجات",
+          title: "مرحباً بك",
+          description: "تم تسجيل الدخول بنجاح",
         })
         router.push("/dashboard")
+        router.refresh()
       }
     } catch (error) {
       console.error("Login error:", error)
       toast({
-        title: "خطأ في تسجيل الدخول",
-        description: "حدث خطأ غير متوقع",
+        title: "خطأ",
+        description: "حدث خطأ أثناء تسجيل الدخول",
         variant: "destructive",
       })
     } finally {
@@ -110,35 +126,44 @@ export default function LoginPage() {
     try {
       setIsLoading(true)
 
+      const response = await fetch("/api/auth/register", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          ...values,
+          image: profileImage,
+        }),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || "فشل في إنشاء الحساب")
+      }
+
+      toast({
+        title: "تم إنشاء الحساب",
+        description: "تم إنشاء حسابك بنجاح، يمكنك الآن تسجيل الدخول",
+      })
+
+      // تسجيل الدخول تلقائياً
       const result = await signIn("credentials", {
-        name: values.name,
         email: values.email,
         password: values.password,
-        action: "register",
         redirect: false,
       })
 
-      if (result?.error) {
-        toast({
-          title: "خطأ في إنشاء الحساب",
-          description: result.error,
-          variant: "destructive",
-        })
-        return
-      }
-
       if (result?.ok) {
-        toast({
-          title: "تم إنشاء الحساب بنجاح",
-          description: "مرحباً بك في سوق المنتجات",
-        })
         router.push("/dashboard")
+        router.refresh()
       }
-    } catch (error) {
-      console.error("Register error:", error)
+    } catch (error: any) {
+      console.error("Registration error:", error)
       toast({
         title: "خطأ في إنشاء الحساب",
-        description: "حدث خطأ غير متوقع",
+        description: error.message || "حدث خطأ أثناء إنشاء الحساب",
         variant: "destructive",
       })
     } finally {
@@ -153,16 +178,16 @@ export default function LoginPage() {
         <Card className="w-full max-w-md">
           <CardHeader className="text-center">
             <CardTitle className="text-2xl">مرحباً بك</CardTitle>
-            <CardDescription>سجل دخولك أو أنشئ حساباً جديداً للمتابعة</CardDescription>
+            <CardDescription>سجل الدخول أو أنشئ حساباً جديداً</CardDescription>
           </CardHeader>
           <CardContent>
-            <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+            <Tabs defaultValue="login" className="w-full">
               <TabsList className="grid w-full grid-cols-2">
                 <TabsTrigger value="login">تسجيل الدخول</TabsTrigger>
                 <TabsTrigger value="register">إنشاء حساب</TabsTrigger>
               </TabsList>
 
-              <TabsContent value="login" className="space-y-4">
+              <TabsContent value="login">
                 <Form {...loginForm}>
                   <form onSubmit={loginForm.handleSubmit(onLogin)} className="space-y-4">
                     <FormField
@@ -172,7 +197,7 @@ export default function LoginPage() {
                         <FormItem>
                           <FormLabel>البريد الإلكتروني</FormLabel>
                           <FormControl>
-                            <Input type="email" placeholder="أدخل بريدك الإلكتروني" {...field} />
+                            <Input type="email" placeholder="example@email.com" {...field} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -185,7 +210,7 @@ export default function LoginPage() {
                         <FormItem>
                           <FormLabel>كلمة المرور</FormLabel>
                           <FormControl>
-                            <Input type="password" placeholder="أدخل كلمة المرور" {...field} />
+                            <Input type="password" placeholder="••••••••" {...field} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -205,9 +230,55 @@ export default function LoginPage() {
                 </Form>
               </TabsContent>
 
-              <TabsContent value="register" className="space-y-4">
+              <TabsContent value="register">
                 <Form {...registerForm}>
                   <form onSubmit={registerForm.handleSubmit(onRegister)} className="space-y-4">
+                    {/* صورة الملف الشخصي */}
+                    <div className="flex flex-col items-center space-y-4">
+                      <div className="relative">
+                        <div className="h-20 w-20 rounded-full border-2 border-dashed border-gray-300 flex items-center justify-center overflow-hidden">
+                          {profileImage ? (
+                            <Image
+                              src={profileImage || "/placeholder.svg"}
+                              alt="صورة الملف الشخصي"
+                              width={80}
+                              height={80}
+                              className="h-full w-full object-cover"
+                            />
+                          ) : (
+                            <User className="h-8 w-8 text-gray-400" />
+                          )}
+                        </div>
+                        {profileImage && (
+                          <Button
+                            type="button"
+                            variant="destructive"
+                            size="sm"
+                            className="absolute -top-2 -right-2 h-6 w-6 rounded-full p-0"
+                            onClick={removeImage}
+                          >
+                            <X className="h-3 w-3" />
+                          </Button>
+                        )}
+                      </div>
+                      <div className="flex flex-col items-center space-y-2">
+                        <Button type="button" variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}>
+                          <Upload className="h-4 w-4 mr-2" />
+                          {profileImage ? "تغيير الصورة" : "إضافة صورة"}
+                        </Button>
+                        <p className="text-xs text-muted-foreground text-center">
+                          اختياري - سيتم استخدام صورة افتراضية إذا لم تختر صورة
+                        </p>
+                      </div>
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="image/*"
+                        onChange={handleImageUpload}
+                        className="hidden"
+                      />
+                    </div>
+
                     <FormField
                       control={registerForm.control}
                       name="name"
@@ -215,7 +286,7 @@ export default function LoginPage() {
                         <FormItem>
                           <FormLabel>الاسم</FormLabel>
                           <FormControl>
-                            <Input placeholder="أدخل اسمك" {...field} />
+                            <Input placeholder="اسمك الكامل" {...field} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -228,7 +299,7 @@ export default function LoginPage() {
                         <FormItem>
                           <FormLabel>البريد الإلكتروني</FormLabel>
                           <FormControl>
-                            <Input type="email" placeholder="أدخل بريدك الإلكتروني" {...field} />
+                            <Input type="email" placeholder="example@email.com" {...field} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -241,20 +312,7 @@ export default function LoginPage() {
                         <FormItem>
                           <FormLabel>كلمة المرور</FormLabel>
                           <FormControl>
-                            <Input type="password" placeholder="أدخل كلمة المرور" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={registerForm.control}
-                      name="confirmPassword"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>تأكيد كلمة المرور</FormLabel>
-                          <FormControl>
-                            <Input type="password" placeholder="أعد إدخال كلمة المرور" {...field} />
+                            <Input type="password" placeholder="••••••••" {...field} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>

@@ -1,9 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/app/api/auth/[...nextauth]/route"
-import { MongoClient } from "mongodb"
-
-const client = new MongoClient(process.env.MONGODB_URI!)
+import { checkProfileLike } from "@/lib/db"
 
 export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
   try {
@@ -12,18 +10,8 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       return NextResponse.json({ isLiked: false })
     }
 
-    const { id } = params
-    const userId = session.user.id
-
-    await client.connect()
-    const db = client.db("roblox_marketplace")
-
-    const existingLike = await db.collection("profile_likes").findOne({
-      profileId: id,
-      userId: userId,
-    })
-
-    return NextResponse.json({ isLiked: !!existingLike })
+    const isLiked = await checkProfileLike(params.id, session.user.id)
+    return NextResponse.json({ isLiked })
   } catch (error) {
     console.error("Error checking like status:", error)
     return NextResponse.json({ isLiked: false })

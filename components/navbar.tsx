@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { Button } from "@/components/ui/button"
@@ -17,22 +17,43 @@ import { SearchDialog } from "@/components/search-dialog"
 import { ModeToggle } from "@/components/mode-toggle"
 import { useAuth } from "@/hooks/use-auth"
 import { Logo } from "@/components/logo"
-import { Menu, Search, User, Settings, LogOut, Plus, Home, ShoppingBag, Calculator } from "lucide-react"
+import { Menu, Search, User, Settings, LogOut, Plus, Home, ShoppingBag, Calculator, MessageCircle } from "lucide-react"
+import { Badge } from "@/components/ui/badge"
 
 const navigation = [
   { name: "الرئيسية", href: "/", icon: Home },
   { name: "المنتجات", href: "/assets", icon: ShoppingBag },
 ]
 
-const tools = [
-  { name: "حسابات الضرائب", href: "/calculators", icon: Calculator },
-  { name: "معلومات الحساب", href: "/account-info", icon: User },
-]
+const tools = [{ name: "حسابات الضرائب", href: "/calculators", icon: Calculator }]
 
 export function Navbar() {
   const { user, signOut } = useAuth()
   const pathname = usePathname()
   const [isSearchOpen, setIsSearchOpen] = useState(false)
+  const [unreadMessages, setUnreadMessages] = useState(0)
+
+  // جلب عدد الرسائل غير المقروءة
+  useEffect(() => {
+    if (user) {
+      const fetchUnreadMessages = async () => {
+        try {
+          const response = await fetch("/api/messages/unread-count")
+          if (response.ok) {
+            const { count } = await response.json()
+            setUnreadMessages(count)
+          }
+        } catch (error) {
+          console.error("Error fetching unread messages:", error)
+        }
+      }
+
+      fetchUnreadMessages()
+      // تحديث كل 30 ثانية
+      const interval = setInterval(fetchUnreadMessages, 30000)
+      return () => clearInterval(interval)
+    }
+  }, [user])
 
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -80,6 +101,24 @@ export function Navbar() {
                 })}
               </DropdownMenuContent>
             </DropdownMenu>
+
+            {/* Messages Link - Only show if user is logged in */}
+            {user && (
+              <Link
+                href="/messages"
+                className={`flex items-center space-x-2 rtl:space-x-reverse text-sm font-medium transition-colors hover:text-primary relative ${
+                  pathname === "/messages" ? "text-foreground" : "text-muted-foreground"
+                }`}
+              >
+                <MessageCircle className="h-4 w-4" />
+                <span>الرسائل</span>
+                {unreadMessages > 0 && (
+                  <Badge variant="destructive" className="absolute -top-2 -right-2 h-5 w-5 rounded-full p-0 text-xs">
+                    {unreadMessages > 99 ? "99+" : unreadMessages}
+                  </Badge>
+                )}
+              </Link>
+            )}
           </nav>
         </div>
 
@@ -105,7 +144,9 @@ export function Navbar() {
                   <Button variant="ghost" className="relative h-8 w-8 rounded-full">
                     <Avatar className="h-8 w-8">
                       <AvatarImage src={user.image || ""} alt={user.name || ""} />
-                      <AvatarFallback>{user.name?.charAt(0) || user.email?.charAt(0) || "U"}</AvatarFallback>
+                      <AvatarFallback>
+                        <User className="h-4 w-4" />
+                      </AvatarFallback>
                     </Avatar>
                   </Button>
                 </DropdownMenuTrigger>
@@ -121,6 +162,17 @@ export function Navbar() {
                     <Link href="/dashboard" className="flex items-center space-x-2 rtl:space-x-reverse">
                       <User className="h-4 w-4" />
                       <span>لوحة التحكم</span>
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link href="/messages" className="flex items-center space-x-2 rtl:space-x-reverse relative">
+                      <MessageCircle className="h-4 w-4" />
+                      <span>الرسائل</span>
+                      {unreadMessages > 0 && (
+                        <Badge variant="destructive" className="h-4 w-4 rounded-full p-0 text-xs">
+                          {unreadMessages > 99 ? "99+" : unreadMessages}
+                        </Badge>
+                      )}
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild>
@@ -196,6 +248,25 @@ export function Navbar() {
                       )
                     })}
                   </div>
+
+                  {user && (
+                    <div className="border-t pt-2">
+                      <Link
+                        href="/messages"
+                        className={`flex items-center space-x-2 rtl:space-x-reverse p-2 rounded-md transition-colors hover:bg-accent relative ${
+                          pathname === "/messages" ? "bg-accent text-accent-foreground" : "text-muted-foreground"
+                        }`}
+                      >
+                        <MessageCircle className="h-4 w-4" />
+                        <span>الرسائل</span>
+                        {unreadMessages > 0 && (
+                          <Badge variant="destructive" className="h-4 w-4 rounded-full p-0 text-xs">
+                            {unreadMessages > 99 ? "99+" : unreadMessages}
+                          </Badge>
+                        )}
+                      </Link>
+                    </div>
+                  )}
                 </div>
 
                 {user && (

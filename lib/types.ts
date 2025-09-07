@@ -2,12 +2,13 @@ export interface Seller {
   id: string
   username: string
   avatar: string
-  discordId: string
   badges: string[]
   joinDate: string
+  createdAt?: string
   totalSales: number
   listedAssets: number
   averageRating: number
+  likes?: number
 }
 
 export interface Asset {
