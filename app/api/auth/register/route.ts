@@ -9,7 +9,6 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const { name, email, password, image } = body
 
-    // التحقق من البيانات
     if (!name || !email || !password) {
       return NextResponse.json({ error: "جميع الحقول مطلوبة" }, { status: 400 })
     }
@@ -33,10 +32,12 @@ export async function POST(request: NextRequest) {
 
     const hashedPassword = await bcrypt.hash(password, 12)
 
-    // التعامل مع الصورة - رابط فقط أو صورة افتراضية
-    let processedImage = "/default-avatar.png" // ضع صورة افتراضية في public
+    // استخدم الصورة المضغوطة أو الصورة الافتراضية
+    let processedImage = "/default-avatar.png"
     if (image && (image.startsWith("http://") || image.startsWith("https://"))) {
       processedImage = image
+    } else if (image && image.startsWith("data:image/")) {
+      processedImage = image // الصورة مضغوطة مسبقًا من الواجهة
     }
 
     const now = new Date()
