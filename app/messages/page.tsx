@@ -4,112 +4,102 @@ import type React from "react"
 
 import { useState, useEffect, useRef } from "react"
 import { useAuth } from "@/hooks/use-auth"
-import { useRouter } from "next/navigation"
-import { Navbar } from "@/components/navbar"
-import { LoadingSpinner } from "@/components/loading-spinner"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
-import { Send, User, MessageCircle } from "lucide-react"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Navbar } from "@/components/navbar"
+import { LoadingSpinner } from "@/components/loading-spinner"
 import { useToast } from "@/hooks/use-toast"
+import { Send, MessageCircle, User } from "lucide-react"
+import { formatDistanceToNow } from "date-fns"
+import { ar } from "date-fns/locale"
 
 interface Message {
   id: string
   senderId: string
   receiverId: string
-  message: string
-  isRead: boolean
+  content: string
+  read: boolean
   createdAt: string
-  senderName: string
-  senderImage?: string
 }
 
 interface Conversation {
   userId: string
   userName: string
-  userImage?: string
-  lastMessage?: string
-  lastMessageAt?: string
+  userImage: string | null
+  lastMessage: string
+  lastMessageTime: string
   unreadCount: number
 }
 
 export default function MessagesPage() {
-  const { user, isLoading } = useAuth()
-  const router = useRouter()
+  const { user } = useAuth()
   const { toast } = useToast()
   const [conversations, setConversations] = useState<Conversation[]>([])
-  const [selectedConversation, setSelectedConversation] = useState<string | null>(null)
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null)
   const [messages, setMessages] = useState<Message[]>([])
   const [newMessage, setNewMessage] = useState("")
-  const [loadingConversations, setLoadingConversations] = useState(true)
-  const [loadingMessages, setLoadingMessages] = useState(false)
-  const [sending, setSending] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [sendingMessage, setSendingMessage] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
-  useEffect(() => {
-    if (!isLoading && !user) {
-      router.push("/login")
-    }
-  }, [user, isLoading, router])
-
+  // جلب المحادثات
   useEffect(() => {
     if (user) {
       fetchConversations()
     }
   }, [user])
 
+  // جلب الرسائل عند اختيار محادثة
   useEffect(() => {
-    if (selectedConversation) {
-      fetchMessages(selectedConversation)
+    if (selectedUserId && user) {
+      fetchMessages(selectedUserId)
+      markMessagesAsRead(selectedUserId)
     }
-  }, [selectedConversation])
+  }, [selectedUserId, user])
 
+  // التمرير إلى آخر رسالة
   useEffect(() => {
     scrollToBottom()
   }, [messages])
-
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
-  }
 
   const fetchConversations = async () => {
     try {
       const response = await fetch("/api/messages/conversations")
       if (response.ok) {
         const data = await response.json()
-        setConversations(data)
+        setConversations(data.conversations)
       }
     } catch (error) {
       console.error("Error fetching conversations:", error)
     } finally {
-      setLoadingConversations(false)
+      setLoading(false)
     }
   }
 
   const fetchMessages = async (userId: string) => {
     try {
-      setLoadingMessages(true)
       const response = await fetch(`/api/messages/${userId}`)
       if (response.ok) {
         const data = await response.json()
-        setMessages(data)
-        // تحديد الرسائل كمقروءة
-        await markAsRead(userId)
+        setMessages(data.messages)
       }
     } catch (error) {
       console.error("Error fetching messages:", error)
-    } finally {
-      setLoadingMessages(false)
     }
   }
 
-  const markAsRead = async (userId: string) => {
+  const markMessagesAsRead = async (userId: string) => {
     try {
-      await fetch(`/api/messages/${userId}/read`, { method: "POST" })
-      // تحديث المحادثات لإزالة العدد غير المقروء
+      await fetch(`/api/messages/${userId}/read`, {
+        method: "POST",
+      })
+
+      // تحديث عدد الرسائل غير المقروءة في المحادثات
       setConversations((prev) => prev.map((conv) => (conv.userId === userId ? { ...conv, unreadCount: 0 } : conv)))
     } catch (error) {
       console.error("Error marking messages as read:", error)
@@ -117,25 +107,27 @@ export default function MessagesPage() {
   }
 
   const sendMessage = async () => {
-    if (!newMessage.trim() || !selectedConversation || sending) return
+    if (!newMessage.trim() || !selectedUserId || sendingMessage) return
 
     try {
-      setSending(true)
+      setSendingMessage(true)
+
       const response = await fetch("/api/messages/send", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          receiverId: selectedConversation,
-          message: newMessage.trim(),
+          receiverId: selectedUserId,
+          content: newMessage.trim(),
         }),
       })
 
       if (response.ok) {
-        const sentMessage = await response.json()
-        setMessages((prev) => [...prev, sentMessage])
+        const data = await response.json()
+        setMessages((prev) => [...prev, data.message])
         setNewMessage("")
+
         // تحديث المحادثات
         fetchConversations()
       } else {
@@ -149,8 +141,12 @@ export default function MessagesPage() {
         variant: "destructive",
       })
     } finally {
-      setSending(false)
+      setSendingMessage(false)
     }
+  }
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
   }
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -160,26 +156,41 @@ export default function MessagesPage() {
     }
   }
 
-  if (isLoading || loadingConversations) {
+  if (!user) {
     return (
       <div className="flex min-h-screen flex-col">
         <Navbar />
         <div className="flex flex-1 items-center justify-center">
-          <LoadingSpinner size="lg" />
+          <Card className="w-full max-w-md">
+            <CardContent className="pt-6">
+              <div className="text-center">
+                <MessageCircle className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
+                <h3 className="text-lg font-semibold mb-2">تسجيل الدخول مطلوب</h3>
+                <p className="text-muted-foreground">يجب تسجيل الدخول لعرض الرسائل</p>
+              </div>
+            </CardContent>
+          </Card>
         </div>
       </div>
     )
   }
 
-  if (!user) {
-    return null
+  if (loading) {
+    return (
+      <div className="flex min-h-screen flex-col">
+        <Navbar />
+        <div className="flex flex-1 items-center justify-center">
+          <LoadingSpinner />
+        </div>
+      </div>
+    )
   }
 
   return (
     <div className="flex min-h-screen flex-col">
       <Navbar />
-      <div className="container py-8">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 h-[600px]">
+      <div className="flex flex-1 container py-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full">
           {/* قائمة المحادثات */}
           <Card className="md:col-span-1">
             <CardHeader>
@@ -189,39 +200,42 @@ export default function MessagesPage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="p-0">
-              <ScrollArea className="h-[500px]">
+              <ScrollArea className="h-[600px]">
                 {conversations.length === 0 ? (
-                  <div className="p-4 text-center text-muted-foreground">
-                    <MessageCircle className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                    <p>لا توجد محادثات بعد</p>
-                  </div>
+                  <div className="p-4 text-center text-muted-foreground">لا توجد محادثات</div>
                 ) : (
                   conversations.map((conversation) => (
                     <div
                       key={conversation.userId}
-                      className={`flex items-center gap-3 p-4 cursor-pointer hover:bg-accent transition-colors ${
-                        selectedConversation === conversation.userId ? "bg-accent" : ""
+                      className={`p-4 cursor-pointer hover:bg-muted/50 border-b ${
+                        selectedUserId === conversation.userId ? "bg-muted" : ""
                       }`}
-                      onClick={() => setSelectedConversation(conversation.userId)}
+                      onClick={() => setSelectedUserId(conversation.userId)}
                     >
-                      <Avatar className="h-10 w-10">
-                        <AvatarImage src={conversation.userImage || ""} alt={conversation.userName} />
-                        <AvatarFallback>
-                          <User className="h-4 w-4" />
-                        </AvatarFallback>
-                      </Avatar>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between">
-                          <p className="font-medium truncate">{conversation.userName}</p>
-                          {conversation.unreadCount > 0 && (
-                            <span className="bg-destructive text-destructive-foreground text-xs rounded-full px-2 py-1 min-w-[20px] text-center">
-                              {conversation.unreadCount}
-                            </span>
-                          )}
-                        </div>
-                        {conversation.lastMessage && (
+                      <div className="flex items-center gap-3">
+                        <Avatar className="h-10 w-10">
+                          <AvatarImage src={conversation.userImage || ""} />
+                          <AvatarFallback>
+                            <User className="h-5 w-5" />
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between">
+                            <p className="font-medium truncate">{conversation.userName}</p>
+                            {conversation.unreadCount > 0 && (
+                              <Badge variant="destructive" className="text-xs">
+                                {conversation.unreadCount}
+                              </Badge>
+                            )}
+                          </div>
                           <p className="text-sm text-muted-foreground truncate">{conversation.lastMessage}</p>
-                        )}
+                          <p className="text-xs text-muted-foreground">
+                            {formatDistanceToNow(new Date(conversation.lastMessageTime), {
+                              addSuffix: true,
+                              locale: ar,
+                            })}
+                          </p>
+                        </div>
                       </div>
                     </div>
                   ))
@@ -232,25 +246,15 @@ export default function MessagesPage() {
 
           {/* منطقة الرسائل */}
           <Card className="md:col-span-2">
-            {selectedConversation ? (
+            {selectedUserId ? (
               <>
                 <CardHeader>
-                  <CardTitle>
-                    {conversations.find((c) => c.userId === selectedConversation)?.userName || "محادثة"}
-                  </CardTitle>
+                  <CardTitle>{conversations.find((c) => c.userId === selectedUserId)?.userName || "محادثة"}</CardTitle>
                 </CardHeader>
                 <CardContent className="p-0">
-                  <ScrollArea className="h-[400px] p-4">
-                    {loadingMessages ? (
-                      <div className="flex justify-center items-center h-full">
-                        <LoadingSpinner />
-                      </div>
-                    ) : messages.length === 0 ? (
-                      <div className="text-center text-muted-foreground">
-                        <MessageCircle className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                        <p>لا توجد رسائل بعد</p>
-                        <p className="text-sm">ابدأ المحادثة بإرسال رسالة</p>
-                      </div>
+                  <ScrollArea className="h-[500px] p-4">
+                    {messages.length === 0 ? (
+                      <div className="text-center text-muted-foreground py-8">لا توجد رسائل</div>
                     ) : (
                       <div className="space-y-4">
                         {messages.map((message) => (
@@ -260,16 +264,14 @@ export default function MessagesPage() {
                           >
                             <div
                               className={`max-w-[70%] rounded-lg p-3 ${
-                                message.senderId === user.id
-                                  ? "bg-primary text-primary-foreground"
-                                  : "bg-muted text-muted-foreground"
+                                message.senderId === user.id ? "bg-primary text-primary-foreground" : "bg-muted"
                               }`}
                             >
-                              <p className="text-sm">{message.message}</p>
+                              <p className="text-sm">{message.content}</p>
                               <p className="text-xs opacity-70 mt-1">
-                                {new Date(message.createdAt).toLocaleTimeString("ar-SA", {
-                                  hour: "2-digit",
-                                  minute: "2-digit",
+                                {formatDistanceToNow(new Date(message.createdAt), {
+                                  addSuffix: true,
+                                  locale: ar,
                                 })}
                               </p>
                             </div>
@@ -287,21 +289,20 @@ export default function MessagesPage() {
                         value={newMessage}
                         onChange={(e) => setNewMessage(e.target.value)}
                         onKeyPress={handleKeyPress}
-                        disabled={sending}
+                        disabled={sendingMessage}
                       />
-                      <Button onClick={sendMessage} disabled={sending || !newMessage.trim()}>
-                        {sending ? <LoadingSpinner className="h-4 w-4" /> : <Send className="h-4 w-4" />}
+                      <Button onClick={sendMessage} disabled={!newMessage.trim() || sendingMessage} size="sm">
+                        {sendingMessage ? <LoadingSpinner className="h-4 w-4" /> : <Send className="h-4 w-4" />}
                       </Button>
                     </div>
                   </div>
                 </CardContent>
               </>
             ) : (
-              <CardContent className="flex items-center justify-center h-full">
+              <CardContent className="flex items-center justify-center h-[600px]">
                 <div className="text-center text-muted-foreground">
-                  <MessageCircle className="h-16 w-16 mx-auto mb-4 opacity-50" />
-                  <p className="text-lg font-medium">اختر محادثة للبدء</p>
-                  <p className="text-sm">اختر محادثة من القائمة لعرض الرسائل</p>
+                  <MessageCircle className="mx-auto h-12 w-12 mb-4" />
+                  <p>اختر محادثة لبدء المراسلة</p>
                 </div>
               </CardContent>
             )}

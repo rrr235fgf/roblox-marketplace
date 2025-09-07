@@ -6,7 +6,8 @@ const client = new MongoClient(process.env.MONGODB_URI!)
 
 export async function POST(request: NextRequest) {
   try {
-    const { name, email, password, image } = await request.json()
+    const body = await request.json()
+    const { name, email, password, image } = body
 
     // التحقق من البيانات
     if (!name || !email || !password) {
@@ -15,6 +16,12 @@ export async function POST(request: NextRequest) {
 
     if (password.length < 6) {
       return NextResponse.json({ error: "كلمة المرور يجب أن تكون 6 أحرف على الأقل" }, { status: 400 })
+    }
+
+    // التحقق من صحة البريد الإلكتروني
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    if (!emailRegex.test(email)) {
+      return NextResponse.json({ error: "البريد الإلكتروني غير صالح" }, { status: 400 })
     }
 
     await client.connect()
@@ -32,8 +39,8 @@ export async function POST(request: NextRequest) {
     // إنشاء المستخدم
     const now = new Date()
     const result = await db.collection("users").insertOne({
-      name,
-      email,
+      name: name.trim(),
+      email: email.toLowerCase().trim(),
       password: hashedPassword,
       image: image || null,
       emailVerified: now, // تفعيل تلقائي
@@ -44,10 +51,18 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
+      message: "تم إنشاء الحساب بنجاح",
       userId: result.insertedId.toString(),
     })
   } catch (error) {
     console.error("Registration error:", error)
-    return NextResponse.json({ error: "خطأ في الخادم" }, { status: 500 })
+    return NextResponse.json({ error: "حدث خطأ في الخادم" }, { status: 500 })
+  } finally {
+    // إغلاق الاتصال
+    try {
+      await client.close()
+    } catch (e) {
+      console.error("Error closing connection:", e)
+    }
   }
 }
