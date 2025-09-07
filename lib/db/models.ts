@@ -7,6 +7,12 @@ export interface User {
   emailVerified?: Date | null
   createdAt: Date
   updatedAt: Date
+  likes?: number
+  socialAccounts?: {
+    discord?: string | null
+    tiktok?: string | null
+    instagram?: string | null
+  }
 }
 
 export interface Asset {
@@ -38,5 +44,12 @@ export interface Review {
 export interface Newsletter {
   id: string
   email: string
+  createdAt: Date
+}
+
+export interface ProfileLike {
+  id: string
+  profileId: string
+  userId: string
   createdAt: Date
 }

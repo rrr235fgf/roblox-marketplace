@@ -1,63 +1,79 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { getServerSession } from "next-auth/next"
-import { authOptions } from "../auth/[...nextauth]/route"
-import { getUserById, updateUser } from "@/lib/db"
+import { getServerSession } from "next-auth"
+import { authOptions } from "@/app/api/auth/[...nextauth]/route"
+import { MongoClient, ObjectId } from "mongodb"
 
-// الحصول على الملف الشخصي للمستخدم الحالي
+const client = new MongoClient(process.env.MONGODB_URI!)
+
 export async function GET() {
   try {
     const session = await getServerSession(authOptions)
-
-    if (!session || !session.user) {
-      return NextResponse.json({ error: "يجب تسجيل الدخول للوصول إلى الملف الشخصي" }, { status: 401 })
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "غير مصرح" }, { status: 401 })
     }
 
-    const user = await getUserById(session.user.id)
+    await client.connect()
+    const db = client.db("roblox_marketplace")
 
+    const user = await db.collection("users").findOne({ _id: new ObjectId(session.user.id) })
     if (!user) {
       return NextResponse.json({ error: "المستخدم غير موجود" }, { status: 404 })
     }
 
-    // إزالة المعلومات الحساسة
-    const { _id, ...userProfile } = user
-
-    return NextResponse.json(userProfile)
+    return NextResponse.json({
+      id: user._id.toString(),
+      name: user.name,
+      email: user.email,
+      image: user.image,
+      createdAt: user.createdAt,
+      likes: user.likes || 0,
+      socialAccounts: user.socialAccounts || {
+        discord: null,
+        tiktok: null,
+        instagram: null,
+      },
+    })
   } catch (error) {
     console.error("Error fetching profile:", error)
-    return NextResponse.json({ error: "حدث خطأ أثناء جلب الملف الشخصي" }, { status: 500 })
+    return NextResponse.json({ error: "خطأ في الخادم" }, { status: 500 })
   }
 }
 
-// تحديث الملف الشخصي للمستخدم الحالي
-export async function PUT(request: NextRequest) {
+export async function PATCH(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions)
-
-    if (!session || !session.user) {
-      return NextResponse.json({ error: "يجب تسجيل الدخول لتحديث الملف الشخصي" }, { status: 401 })
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "غير مصرح" }, { status: 401 })
     }
 
-    const data = await request.json()
+    const body = await request.json()
+    const { socialAccounts } = body
 
-    // تحديث المستخدم
-    const updated = await updateUser(session.user.id, {
-      username: data.username,
-      // يمكن إضافة المزيد من الحقول القابلة للتحديث هنا
-    })
-
-    if (!updated) {
-      return NextResponse.json({ error: "فشل تحديث الملف الشخصي" }, { status: 500 })
+    // التحقق من وجود حساب واحد على الأقل
+    if (!socialAccounts.discord && !socialAccounts.tiktok && !socialAccounts.instagram) {
+      return NextResponse.json({ error: "يجب إضافة حساب واحد على الأقل من منصات التواصل الاجتماعي" }, { status: 400 })
     }
 
-    // الحصول على المستخدم المحدث
-    const updatedUser = await getUserById(session.user.id)
+    await client.connect()
+    const db = client.db("roblox_marketplace")
 
-    // إزالة المعلومات الحساسة
-    const { _id, ...userProfile } = updatedUser
+    await db.collection("users").updateOne(
+      { _id: new ObjectId(session.user.id) },
+      {
+        $set: {
+          socialAccounts: {
+            discord: socialAccounts.discord || null,
+            tiktok: socialAccounts.tiktok || null,
+            instagram: socialAccounts.instagram || null,
+          },
+          updatedAt: new Date(),
+        },
+      },
+    )
 
-    return NextResponse.json(userProfile)
+    return NextResponse.json({ success: true })
   } catch (error) {
     console.error("Error updating profile:", error)
-    return NextResponse.json({ error: "حدث خطأ أثناء تحديث الملف الشخصي" }, { status: 500 })
+    return NextResponse.json({ error: "خطأ في الخادم" }, { status: 500 })
   }
 }

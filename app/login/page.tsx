@@ -14,7 +14,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Navbar } from "@/components/navbar"
 import { LoadingSpinner } from "@/components/loading-spinner"
 import { useToast } from "@/hooks/use-toast"
-import { DiscordIcon } from "@/components/discord-icon"
 
 const loginSchema = z.object({
   email: z.string().email({ message: "البريد الإلكتروني غير صحيح" }),
@@ -147,21 +146,6 @@ export default function LoginPage() {
     }
   }
 
-  const handleDiscordLogin = async () => {
-    try {
-      setIsLoading(true)
-      await signIn("discord", { callbackUrl: "/dashboard" })
-    } catch (error) {
-      console.error("Discord login error:", error)
-      toast({
-        title: "خطأ في تسجيل الدخول",
-        description: "حدث خطأ أثناء تسجيل الدخول بـ Discord",
-        variant: "destructive",
-      })
-      setIsLoading(false)
-    }
-  }
-
   return (
     <div className="flex min-h-screen flex-col">
       <Navbar />
@@ -290,26 +274,6 @@ export default function LoginPage() {
                 </Form>
               </TabsContent>
             </Tabs>
-
-            <div className="mt-6">
-              <div className="relative">
-                <div className="absolute inset-0 flex items-center">
-                  <span className="w-full border-t" />
-                </div>
-                <div className="relative flex justify-center text-xs uppercase">
-                  <span className="bg-background px-2 text-muted-foreground">أو</span>
-                </div>
-              </div>
-              <Button
-                variant="outline"
-                className="w-full mt-4 bg-transparent"
-                onClick={handleDiscordLogin}
-                disabled={isLoading}
-              >
-                <DiscordIcon className="mr-2 h-4 w-4" />
-                متابعة مع Discord
-              </Button>
-            </div>
           </CardContent>
         </Card>
       </div>

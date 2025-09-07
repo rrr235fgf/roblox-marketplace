@@ -1,5 +1,4 @@
 import NextAuth, { type NextAuthOptions } from "next-auth"
-import DiscordProvider from "next-auth/providers/discord"
 import CredentialsProvider from "next-auth/providers/credentials"
 import { MongoDBAdapter } from "@next-auth/mongodb-adapter"
 import { MongoClient } from "mongodb"
@@ -28,12 +27,6 @@ declare module "next-auth/jwt" {
 export const authOptions: NextAuthOptions = {
   adapter: MongoDBAdapter(clientPromise),
   providers: [
-    // Discord Provider للمستخدمين القدامى
-    DiscordProvider({
-      clientId: process.env.DISCORD_CLIENT_ID!,
-      clientSecret: process.env.DISCORD_CLIENT_SECRET!,
-    }),
-    // Credentials Provider للتسجيل الجديد
     CredentialsProvider({
       name: "credentials",
       credentials: {
@@ -64,9 +57,15 @@ export const authOptions: NextAuthOptions = {
               email: credentials.email,
               password: hashedPassword,
               image: null,
-              emailVerified: new Date(), // تفعيل تلقائي
+              emailVerified: new Date(),
               createdAt: new Date(),
               updatedAt: new Date(),
+              likes: 0,
+              socialAccounts: {
+                discord: null,
+                tiktok: null,
+                instagram: null,
+              },
             }
 
             const result = await db.collection("users").insertOne(newUser)

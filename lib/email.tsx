@@ -1,19 +1,26 @@
-// Simple email service without nodemailer for now
-export async function sendVerificationEmail(email: string, username: string, token: string): Promise<void> {
-  // For now, just log the verification email
-  console.log(`Verification email for ${email} (${username}): Token ${token}`)
+// مكتبة بريد إلكتروني بسيطة للتطوير
+export async function sendVerificationEmail(email: string, token: string) {
+  // في بيئة التطوير، نطبع الرابط في وحدة التحكم
+  const verificationUrl = `${process.env.NEXTAUTH_URL}/verify-email?token=${token}`
 
-  // In production, you would integrate with a service like SendGrid, Resend, etc.
-  // For now, we'll just simulate success
-  return Promise.resolve()
+  console.log(`
+=== رسالة تحقق البريد الإلكتروني ===
+إلى: ${email}
+الموضوع: تحقق من بريدك الإلكتروني
+الرابط: ${verificationUrl}
+=====================================
+  `)
+
+  // في بيئة الإنتاج، يمكن استخدام خدمة بريد إلكتروني حقيقية
+  return Promise.resolve(true)
 }
 
-// Simple email service without nodemailer for now
-export async function sendPasswordResetEmail(email: string, username: string, token: string): Promise<void> {
-  // For now, just log the password reset email
-  console.log(`Password reset email for ${email} (${username}): Token ${token}`)
-
-  // In production, you would integrate with a service like SendGrid, Resend, etc.
-  // For now, we'll just simulate success
-  return Promise.resolve()
+export function createTransporter() {
+  // وظيفة وهمية للتوافق
+  return {
+    sendMail: async (options: any) => {
+      console.log("إرسال بريد إلكتروني:", options)
+      return Promise.resolve({ messageId: "test-message-id" })
+    },
+  }
 }

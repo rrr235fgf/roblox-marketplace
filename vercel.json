@@ -1,6 +1,8 @@
 {
   "buildCommand": "pnpm install --no-frozen-lockfile && pnpm build",
+  "installCommand": "pnpm install --no-frozen-lockfile",
   "framework": "nextjs",
+  "regions": ["iad1"],
   "functions": {
     "app/api/**/*.ts": {
       "maxDuration": 30
