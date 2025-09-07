@@ -26,22 +26,19 @@ export async function POST(request: NextRequest) {
     await client.connect()
     const db = client.db("roblox_marketplace")
 
-    // التحقق من وجود المستخدم
     const existingUser = await db.collection("users").findOne({ email })
     if (existingUser) {
       return NextResponse.json({ error: "البريد الإلكتروني مستخدم بالفعل" }, { status: 400 })
     }
 
-    // تشفير كلمة المرور
     const hashedPassword = await bcrypt.hash(password, 12)
 
-    // معالجة الصورة - بدون Base64، استخدم رابط افتراضي
-    let processedImage = "/default-avatar.png" // أي صورة افتراضية عندك
+    // التعامل مع الصورة - رابط فقط أو صورة افتراضية
+    let processedImage = "/default-avatar.png" // ضع صورة افتراضية في public
     if (image && (image.startsWith("http://") || image.startsWith("https://"))) {
       processedImage = image
     }
 
-    // إنشاء المستخدم
     const now = new Date()
     const result = await db.collection("users").insertOne({
       name: name.trim(),
