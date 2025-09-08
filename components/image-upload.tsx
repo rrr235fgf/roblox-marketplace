@@ -1,7 +1,6 @@
 "use client"
 
 import type React from "react"
-
 import { useState, useRef } from "react"
 import Image from "next/image"
 import { Button } from "@/components/ui/button"
@@ -17,13 +16,50 @@ interface ImageUploadProps {
   maxImages?: number
 }
 
+// دالة لضغط الصورة
+const compressImage = (file: File, maxWidth = 800, quality = 0.8): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const canvas = document.createElement("canvas")
+    const ctx = canvas.getContext("2d")
+    const img = new Image()
+
+    img.onload = () => {
+      // حساب الأبعاد الجديدة
+      let { width, height } = img
+
+      if (width > height) {
+        if (width > maxWidth) {
+          height = (height * maxWidth) / width
+          width = maxWidth
+        }
+      } else {
+        if (height > maxWidth) {
+          width = (width * maxWidth) / height
+          height = maxWidth
+        }
+      }
+
+      canvas.width = width
+      canvas.height = height
+
+      // رسم الصورة
+      ctx?.drawImage(img, 0, 0, width, height)
+
+      // تحويل إلى base64
+      const compressedDataUrl = canvas.toDataURL("image/jpeg", quality)
+      resolve(compressedDataUrl)
+    }
+
+    img.onerror = () => reject(new Error("فشل في تحميل الصورة"))
+    img.src = URL.createObjectURL(file)
+  })
+}
+
 export function ImageUpload({ value, onChange, maxImages = 5 }: ImageUploadProps) {
   const { user } = useAuth()
   const [isUploading, setIsUploading] = useState(false)
-  const [uploadProgress, setUploadProgress] = useState<Record<string, number>>({})
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  // الصور الثابتة البديلة في حالة فشل التحميل
   const fallbackImage = "/placeholder.svg"
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -55,25 +91,62 @@ export function ImageUpload({ value, onChange, maxImages = 5 }: ImageUploadProps
     try {
       for (let i = 0; i < files.length; i++) {
         const file = files[i]
-        const fileId = `upload-${Date.now()}-${i}`
 
-        // إنشاء FormData لتحميل الصورة
-        const formData = new FormData()
-        formData.append("file", file)
-
-        // تحميل الصورة إلى الخادم
-        const response = await fetch("/api/images", {
-          method: "POST",
-          body: formData,
-        })
-
-        if (!response.ok) {
-          const errorData = await response.json()
-          throw new Error(errorData.error || "فشل تحميل الصورة")
+        // التحقق من نوع الملف
+        if (!file.type.startsWith("image/")) {
+          throw new Error("يرجى اختيار ملف صورة صالح")
         }
 
-        const data = await response.json()
-        newImageUrls.push(data.url)
+        // التحقق من حجم الملف (أقل من 10MB)
+        if (file.size > 10 * 1024 * 1024) {
+          throw new Error("حجم الصورة كبير جداً (الحد الأقصى 10MB)")
+        }
+
+        try {
+          // ضغط الصورة
+          const compressedImage = await compressImage(file, 800, 0.8)
+
+          // إنشاء FormData مع الصورة المضغوطة
+          const formData = new FormData()
+
+          // تحويل base64 إلى blob
+          const response = await fetch(compressedImage)
+          const blob = await response.blob()
+
+          formData.append("file", blob, `compressed_${file.name}`)
+
+          // رفع الصورة
+          const uploadResponse = await fetch("/api/images", {
+            method: "POST",
+            body: formData,
+          })
+
+          if (!uploadResponse.ok) {
+            const errorData = await uploadResponse.json()
+            throw new Error(errorData.error || "فشل تحميل الصورة")
+          }
+
+          const data = await uploadResponse.json()
+          newImageUrls.push(data.url)
+        } catch (compressionError) {
+          console.error("Compression error:", compressionError)
+          // في حالة فشل الضغط، جرب الرفع المباشر
+          const formData = new FormData()
+          formData.append("file", file)
+
+          const uploadResponse = await fetch("/api/images", {
+            method: "POST",
+            body: formData,
+          })
+
+          if (!uploadResponse.ok) {
+            const errorData = await uploadResponse.json()
+            throw new Error(errorData.error || "فشل تحميل الصورة")
+          }
+
+          const data = await uploadResponse.json()
+          newImageUrls.push(data.url)
+        }
       }
 
       onChange([...value, ...newImageUrls])
@@ -91,8 +164,6 @@ export function ImageUpload({ value, onChange, maxImages = 5 }: ImageUploadProps
       })
     } finally {
       setIsUploading(false)
-      setUploadProgress({})
-      // إعادة تعيين حقل الإدخال
       if (fileInputRef.current) {
         fileInputRef.current.value = ""
       }
@@ -105,7 +176,7 @@ export function ImageUpload({ value, onChange, maxImages = 5 }: ImageUploadProps
     newImages.splice(index, 1)
     onChange(newImages)
 
-    // إذا كانت الصورة مخزنة في قاعدة البيانات، قم بحذفها
+    // حذف الصورة من الخادم إذا كانت مرفوعة محلياً
     if (imageUrl.startsWith("/api/images/")) {
       const imageId = imageUrl.split("/").pop()
       try {
@@ -130,7 +201,6 @@ export function ImageUpload({ value, onChange, maxImages = 5 }: ImageUploadProps
               className="object-cover"
               unoptimized
               onError={(e) => {
-                // إذا فشل تحميل الصورة، استخدم صورة بديلة
                 const target = e.target as HTMLImageElement
                 target.src = fallbackImage
               }}
@@ -168,6 +238,7 @@ export function ImageUpload({ value, onChange, maxImages = 5 }: ImageUploadProps
                   <>
                     <ImagePlus className="h-8 w-8 text-muted-foreground" />
                     <p className="text-xs text-muted-foreground">اضغط لإضافة صور</p>
+                    <p className="text-xs text-muted-foreground opacity-75">الحد الأقصى 10MB</p>
                   </>
                 )}
               </div>

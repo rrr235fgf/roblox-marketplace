@@ -54,49 +54,25 @@ export default function LoginPage() {
     },
   })
 
-const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-  const file = event.target.files?.[0]
-  if (!file) return
-
-  const img = new Image()
-  const reader = new FileReader()
-
-  reader.onload = (e) => {
-    img.src = e.target?.result as string
-  }
-
-  img.onload = () => {
-    const canvas = document.createElement("canvas")
-    const MAX_WIDTH = 300
-    const MAX_HEIGHT = 300
-    let width = img.width
-    let height = img.height
-
-    if (width > height) {
-      if (width > MAX_WIDTH) {
-        height *= MAX_WIDTH / width
-        width = MAX_WIDTH
+  const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) {
+        toast({
+          title: "خطأ",
+          description: "حجم الصورة يجب أن يكون أقل من 5 ميجابايت",
+          variant: "destructive",
+        })
+        return
       }
-    } else {
-      if (height > MAX_HEIGHT) {
-        width *= MAX_HEIGHT / height
-        height = MAX_HEIGHT
+
+      const reader = new FileReader()
+      reader.onload = (e) => {
+        setProfileImage(e.target?.result as string)
       }
+      reader.readAsDataURL(file)
     }
-
-    canvas.width = width
-    canvas.height = height
-    const ctx = canvas.getContext("2d")
-    ctx?.drawImage(img, 0, 0, width, height)
-
-    // جودة 0.5 لتقليل حجم الصورة
-    const compressedDataUrl = canvas.toDataURL("image/jpeg", 0.5)
-
-    setProfileImage(compressedDataUrl)
   }
-
-  reader.readAsDataURL(file)
-}
 
   const removeImage = () => {
     setProfileImage(null)

@@ -1,22 +1,15 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { getServerSession } from "next-auth/next"
-import { authOptions } from "../auth/[...nextauth]/route"
-import { storeImage } from "@/lib/db"
+import { writeFile, mkdir } from "fs/promises"
+import { join } from "path"
+import { existsSync } from "fs"
 
-// تحميل صورة جديدة
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions)
-
-    if (!session || !session.user) {
-      return NextResponse.json({ error: "يجب تسجيل الدخول لتحميل الصور" }, { status: 401 })
-    }
-
     const formData = await request.formData()
     const file = formData.get("file") as File
 
     if (!file) {
-      return NextResponse.json({ error: "لم يتم تقديم ملف" }, { status: 400 })
+      return NextResponse.json({ error: "لم يتم العثور على ملف" }, { status: 400 })
     }
 
     // التحقق من نوع الملف
@@ -24,31 +17,40 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "يجب أن يكون الملف صورة" }, { status: 400 })
     }
 
-    // التحقق من حجم الملف (5MB كحد أقصى)
-    if (file.size > 5 * 1024 * 1024) {
-      return NextResponse.json({ error: "حجم الملف كبير جدًا (الحد الأقصى 5 ميجابايت)" }, { status: 400 })
+    // التحقق من حجم الملف (أقل من 10MB)
+    if (file.size > 10 * 1024 * 1024) {
+      return NextResponse.json({ error: "حجم الملف كبير جداً (الحد الأقصى 10MB)" }, { status: 400 })
     }
 
-    // تحويل الملف إلى Base64
-    const buffer = await file.arrayBuffer()
-    const base64Data = Buffer.from(buffer).toString("base64")
+    const bytes = await file.arrayBuffer()
+    const buffer = Buffer.from(bytes)
 
-    // تخزين الصورة في قاعدة البيانات
-    const image = await storeImage({
-      filename: file.name,
-      contentType: file.type,
-      data: base64Data,
-      uploadedBy: session.user.id,
-    })
+    // إنشاء مجلد uploads إذا لم يكن موجوداً
+    const uploadsDir = join(process.cwd(), "public", "uploads")
+    if (!existsSync(uploadsDir)) {
+      await mkdir(uploadsDir, { recursive: true })
+    }
+
+    // إنشاء اسم ملف فريد
+    const timestamp = Date.now()
+    const randomString = Math.random().toString(36).substring(2, 15)
+    const fileExtension = file.name.split(".").pop() || "jpg"
+    const fileName = `${timestamp}_${randomString}.${fileExtension}`
+    const filePath = join(uploadsDir, fileName)
+
+    // حفظ الملف
+    await writeFile(filePath, buffer)
+
+    // إرجاع رابط الصورة
+    const imageUrl = `/uploads/${fileName}`
 
     return NextResponse.json({
-      id: image.id,
-      url: `/api/images/${image.id}`,
-      filename: image.filename,
-      contentType: image.contentType,
+      success: true,
+      url: imageUrl,
+      message: "تم رفع الصورة بنجاح",
     })
   } catch (error) {
     console.error("Error uploading image:", error)
-    return NextResponse.json({ error: "حدث خطأ أثناء تحميل الصورة" }, { status: 500 })
+    return NextResponse.json({ error: "حدث خطأ أثناء رفع الصورة" }, { status: 500 })
   }
 }

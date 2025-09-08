@@ -70,12 +70,14 @@ export function Navbar() {
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container flex h-16 items-center justify-between">
         <div className="flex items-center space-x-4 rtl:space-x-reverse">
-          {/* Logo والنص */}
+          {/* Logo والنص مع Gradient */}
           <Link href="/" className="flex items-center space-x-2 rtl:space-x-reverse">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
-              <Store className="h-5 w-5 text-primary-foreground" />
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-blue-500 to-purple-600">
+              <Store className="h-5 w-5 text-white" />
             </div>
-            <span className="text-lg font-bold">متجر روبلوكس</span>
+            <span className="text-lg font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+              متجر روبلوكس
+            </span>
           </Link>
 
           {/* Desktop Navigation */}
@@ -229,10 +231,12 @@ export function Navbar() {
             <SheetContent side="right" className="w-80">
               <div className="flex flex-col space-y-4 mt-4">
                 <div className="flex items-center space-x-2 rtl:space-x-reverse">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
-                    <Store className="h-5 w-5 text-primary-foreground" />
+                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-blue-500 to-purple-600">
+                    <Store className="h-5 w-5 text-white" />
                   </div>
-                  <span className="text-lg font-bold">متجر روبلوكس</span>
+                  <span className="text-lg font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                    متجر روبلوكس
+                  </span>
                 </div>
 
                 <div className="flex flex-col space-y-2">
